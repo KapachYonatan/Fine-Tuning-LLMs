@@ -128,15 +128,34 @@ for model_id, out_path in MODELS.items():
     allowed_ids.sort()
     print(f"  Allowed tokens: {len(allowed_ids):,} / {vocab_size:,}", flush=True)
 
-    # Print a sample of non-whitespace allowed tokens for a quick sanity check
-    samples = []
+    # Split allowed tokens into two buckets for a representative display:
+    #   hebrew_ids  — tokens that contain at least one Hebrew character
+    #   other_ids   — tokens that passed the filter but contain no Hebrew
+    #                 characters (digits, punctuation, whitespace, EOS, …)
+    hebrew_ids = []
+    other_ids  = []
     for tid in allowed_ids:
-        t = tok.decode([tid]).strip()
-        if t:
-            samples.append(repr(t))
-        if len(samples) >= 12:
-            break
-    print(f"  Sample allowed (stripped): {samples}", flush=True)
+        decoded = tok.decode([tid])
+        if any(_is_hebrew_char(c) for c in decoded):
+            hebrew_ids.append(tid)
+        else:
+            other_ids.append(tid)
+
+    print(f"  Breakdown: {len(hebrew_ids):,} contain Hebrew chars, "
+          f"{len(other_ids):,} are digits/punctuation/special", flush=True)
+
+    # Sample ~20 Hebrew-bearing tokens spread evenly across the sorted list
+    # so the sample is representative of the whole vocab range, not just the
+    # lowest IDs.
+    sample_size = 20
+    if hebrew_ids:
+        step = max(1, len(hebrew_ids) // sample_size)
+        sampled = [tok.decode([hebrew_ids[i]]) for i in range(0, len(hebrew_ids), step)]
+        sampled = sampled[:sample_size]
+        print(f"  Sample Hebrew tokens ({len(sampled)} evenly spaced):", flush=True)
+        print(f"    {[repr(t) for t in sampled]}", flush=True)
+    else:
+        print("  No Hebrew-character tokens found — check tokenizer.", flush=True)
 
     payload = {"model_id": model_id, "allowed_token_ids": allowed_ids}
     with open(out_path, "w", encoding="utf-8") as f:
@@ -202,6 +221,11 @@ def generate_response(
     inputs = tokenizer(formatted, return_tensors="pt")
     input_len = inputs["input_ids"].shape[1]
 
+    # Move inputs to the same device as the model to avoid cross-device errors
+    # when device_map="auto" places the model on GPU.
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+    inputs = {k: v.to(device) for k, v in inputs.items()}
+
     gen_kwargs: dict = dict(
         **inputs,
         max_new_tokens=max_new_tokens,
@@ -219,22 +243,49 @@ def generate_response(
     return tokenizer.decode(new_ids, skip_special_tokens=True)
 
 
+# ── Resumable: load any results already written in a previous run ─────────────
+jsonl_path = os.path.join(ROOT, "decoding_outputs.jsonl")
 results: list[dict] = []
+if os.path.exists(jsonl_path):
+    with open(jsonl_path, encoding="utf-8") as f:
+        for line in f:
+            line = line.strip()
+            if line:
+                results.append(json.loads(line))
+    print(f"\n[B] Resuming — loaded {len(results)} existing record(s) from {jsonl_path}", flush=True)
 
-for model_id, out_path in MODELS.items():
+done_models = {rec["model"] for rec in results}
+
+# Open in append mode so every record is written to disk immediately after
+# generation.  If the script crashes mid-run the file already contains all
+# records produced so far, and the next run will skip completed models.
+jsonl_file = open(jsonl_path, "a", encoding="utf-8")
+
+for model_id, token_json_path in MODELS.items():
     print(f"\n{'='*60}", flush=True)
     print(f"[B] Running inference: {model_id}", flush=True)
     print(f"{'='*60}", flush=True)
+
+    if model_id in done_models:
+        print("  Already complete — skipping.", flush=True)
+        continue
+
+    # Load allowed_ids from the JSON written in Section A (works even if this
+    # script was restarted and Section A did not run in the current session).
+    print(f"  Loading allowed token IDs from {token_json_path} ...", flush=True)
+    with open(token_json_path, encoding="utf-8") as f:
+        allowed_ids = json.load(f)["allowed_token_ids"]
+    print(f"  Hebrew-allowed token count: {len(allowed_ids):,}", flush=True)
+
     print(
-        "  Loading model (torch_dtype=float16, device_map=cpu) ...\n"
-        "  NOTE: CPU inference on a 7B model is slow — expect several minutes per query.",
+        "  Loading model (dtype=float16, device_map=auto) ...\n"
+        "  NOTE: inference may take several minutes per query.",
         flush=True,
     )
-
     model = AutoModelForCausalLM.from_pretrained(
         model_id,
         torch_dtype=torch.float16,
-        device_map="cpu",
+        device_map="auto",
         trust_remote_code=True,
         token=True,
     )
@@ -242,9 +293,6 @@ for model_id, out_path in MODELS.items():
         model_id, use_fast=True, trust_remote_code=True, token=True
     )
     print("  Model loaded.", flush=True)
-
-    allowed_ids = _allowed_ids_per_model[model_id]
-    print(f"  Hebrew-allowed token count: {len(allowed_ids):,}", flush=True)
 
     for i, query in enumerate(QUERIES, 1):
         print(f"\n  Query {i}/{len(QUERIES)}: {query[:70]}", flush=True)
@@ -257,26 +305,28 @@ for model_id, out_path in MODELS.items():
         constrained = generate_response(model, tokenizer, query, allowed_ids=allowed_ids)
         print(f"    Done ({len(constrained.split())} words).", flush=True)
 
-        results.append(
-            {
-                "prompt": query,
-                "model": model_id,
-                "unconstrained_output": unconstrained,
-                "constrained_output": constrained,
-            }
-        )
+        rec = {
+            "prompt": query,
+            "model": model_id,
+            "unconstrained_output": unconstrained,
+            "constrained_output": constrained,
+        }
+        results.append(rec)
+        jsonl_file.write(json.dumps(rec, ensure_ascii=False) + "\n")
+        jsonl_file.flush()
 
     print(f"\n  Finished {model_id}. Unloading model ...", flush=True)
     del model, tokenizer
     gc.collect()
+    gc.collect()  # second pass catches any cyclic references missed by the first
 
-# ─────────────────────────────────────────────────────────────────────────────
-# Write decoding_outputs.jsonl
-# ─────────────────────────────────────────────────────────────────────────────
+    if torch.cuda.is_available():
+        torch.cuda.synchronize()    # wait for all GPU ops to finish
+        torch.cuda.empty_cache()    # release cached-but-free GPU memory back to the driver
+        allocated = torch.cuda.memory_allocated() / 1e9
+        reserved  = torch.cuda.memory_reserved()  / 1e9
+        print(f"  GPU memory after unload: {allocated:.2f} GB allocated, "
+              f"{reserved:.2f} GB reserved", flush=True)
 
-jsonl_path = os.path.join(ROOT, "decoding_outputs.jsonl")
-with open(jsonl_path, "w", encoding="utf-8") as f:
-    for rec in results:
-        f.write(json.dumps(rec, ensure_ascii=False) + "\n")
-
-print(f"\nWrote {jsonl_path}  ({len(results)} records)")
+jsonl_file.close()
+print(f"\nWrote {jsonl_path}  ({len(results)} records total)")
