@@ -26,6 +26,7 @@ import torch
 from transformers import (
     AutoModelForCausalLM,
     AutoTokenizer,
+    BitsAndBytesConfig,
     LogitsProcessor,
     LogitsProcessorList,
 )
@@ -277,15 +278,31 @@ for model_id, token_json_path in MODELS.items():
         allowed_ids = json.load(f)["allowed_token_ids"]
     print(f"  Hebrew-allowed token count: {len(allowed_ids):,}", flush=True)
 
-    print(
-        "  Loading model (dtype=float16, device_map=auto) ...\n"
-        "  NOTE: inference may take several minutes per query.",
-        flush=True,
-    )
+    if torch.cuda.is_available():
+        print(
+            "  Loading model (int8 quantization, device_map=auto) ...\n"
+            "  NOTE: inference may take several minutes per query.",
+            flush=True,
+        )
+        load_kwargs = dict(
+            quantization_config=BitsAndBytesConfig(load_in_8bit=True),
+            device_map="auto",
+        )
+    else:
+        print(
+            "  Loading model (float16, device_map=cpu) ...\n"
+            "  NOTE: CPU inference on a 7B model is slow — expect several minutes per query.\n"
+            "  TIP: Run on Colab with a GPU for int8 quantization and much faster inference.",
+            flush=True,
+        )
+        load_kwargs = dict(
+            torch_dtype=torch.float16,
+            device_map="cpu",
+        )
+
     model = AutoModelForCausalLM.from_pretrained(
         model_id,
-        torch_dtype=torch.float16,
-        device_map="auto",
+        **load_kwargs,
         trust_remote_code=True,
         token=True,
     )
