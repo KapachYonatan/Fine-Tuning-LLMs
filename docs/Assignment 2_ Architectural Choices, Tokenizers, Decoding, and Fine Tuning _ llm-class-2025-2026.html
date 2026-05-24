@@ -1,0 +1,685 @@
+<!DOCTYPE html>
+<!-- saved from url=(0093)https://yoavg.github.io/llm-class-2025-2026/ass2-architectural-choices-tokenizers-finetuning/ -->
+<html lang="en-US"><head><meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+    
+    <script type="text/javascript" id="MathJax-script" async="" src="./Assignment 2_ Architectural Choices, Tokenizers, Decoding, and Fine Tuning _ llm-class-2025-2026_files/tex-mml-chtml.js.download">
+    </script>
+    <script>
+      MathJax = {
+        tex: {
+          inlineMath: [['$', '$']]
+        }
+      };
+    </script>
+
+<!-- Begin Jekyll SEO tag v2.8.0 -->
+<title>Assignment 2: Architectural Choices, Tokenizers, Decoding, and Fine Tuning | llm-class-2025-2026</title>
+<meta name="generator" content="Jekyll v3.10.0">
+<meta property="og:title" content="Assignment 2: Architectural Choices, Tokenizers, Decoding, and Fine Tuning">
+<meta property="og:locale" content="en_US">
+<link rel="canonical" href="https://yoavg.github.io/llm-class-2025-2026/ass2-architectural-choices-tokenizers-finetuning/">
+<meta property="og:url" content="https://yoavg.github.io/llm-class-2025-2026/ass2-architectural-choices-tokenizers-finetuning/">
+<meta property="og:site_name" content="llm-class-2025-2026">
+<meta property="og:type" content="website">
+<meta name="twitter:card" content="summary">
+<meta property="twitter:title" content="Assignment 2: Architectural Choices, Tokenizers, Decoding, and Fine Tuning">
+<script type="application/ld+json">
+{"@context":"https://schema.org","@type":"WebPage","headline":"Assignment 2: Architectural Choices, Tokenizers, Decoding, and Fine Tuning","url":"https://yoavg.github.io/llm-class-2025-2026/ass2-architectural-choices-tokenizers-finetuning/"}</script>
+<!-- End Jekyll SEO tag -->
+
+    <link rel="preconnect" href="https://fonts.gstatic.com/">
+    <link rel="preload" href="./Assignment 2_ Architectural Choices, Tokenizers, Decoding, and Fine Tuning _ llm-class-2025-2026_files/css" as="style" type="text/css" crossorigin="">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#157878">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <link rel="stylesheet" href="./Assignment 2_ Architectural Choices, Tokenizers, Decoding, and Fine Tuning _ llm-class-2025-2026_files/style.css">
+    <!-- start custom head snippets, customize with your own _includes/head-custom.html file -->
+
+<!-- Setup Google Analytics -->
+
+
+
+<!-- You can set your favicon here -->
+<!-- link rel="shortcut icon" type="image/x-icon" href="/llm-class-2025-2026/favicon.ico" -->
+
+<!-- end custom head snippets -->
+
+  <style type="text/css">.CtxtMenu_InfoClose {  top:.2em; right:.2em;}
+.CtxtMenu_InfoContent {  overflow:auto; text-align:left; font-size:80%;  padding:.4em .6em; border:1px inset; margin:1em 0px;  max-height:20em; max-width:30em; background-color:#EEEEEE;  white-space:normal;}
+.CtxtMenu_Info.CtxtMenu_MousePost {outline:none;}
+.CtxtMenu_Info {  position:fixed; left:50%; width:auto; text-align:center;  border:3px outset; padding:1em 2em; background-color:#DDDDDD;  color:black;  cursor:default; font-family:message-box; font-size:120%;  font-style:normal; text-indent:0; text-transform:none;  line-height:normal; letter-spacing:normal; word-spacing:normal;  word-wrap:normal; white-space:nowrap; float:none; z-index:201;  border-radius: 15px;                     /* Opera 10.5 and IE9 */  -webkit-border-radius:15px;               /* Safari and Chrome */  -moz-border-radius:15px;                  /* Firefox */  -khtml-border-radius:15px;                /* Konqueror */  box-shadow:0px 10px 20px #808080;         /* Opera 10.5 and IE9 */  -webkit-box-shadow:0px 10px 20px #808080; /* Safari 3 & Chrome */  -moz-box-shadow:0px 10px 20px #808080;    /* Forefox 3.5 */  -khtml-box-shadow:0px 10px 20px #808080;  /* Konqueror */  filter:progid:DXImageTransform.Microsoft.dropshadow(OffX=2, OffY=2, Color="gray", Positive="true"); /* IE */}
+</style><style type="text/css">.CtxtMenu_MenuClose {  position:absolute;  cursor:pointer;  display:inline-block;  border:2px solid #AAA;  border-radius:18px;  -webkit-border-radius: 18px;             /* Safari and Chrome */  -moz-border-radius: 18px;                /* Firefox */  -khtml-border-radius: 18px;              /* Konqueror */  font-family: "Courier New", Courier;  font-size:24px;  color:#F0F0F0}
+.CtxtMenu_MenuClose span {  display:block; background-color:#AAA; border:1.5px solid;  border-radius:18px;  -webkit-border-radius: 18px;             /* Safari and Chrome */  -moz-border-radius: 18px;                /* Firefox */  -khtml-border-radius: 18px;              /* Konqueror */  line-height:0;  padding:8px 0 6px     /* may need to be browser-specific */}
+.CtxtMenu_MenuClose:hover {  color:white!important;  border:2px solid #CCC!important}
+.CtxtMenu_MenuClose:hover span {  background-color:#CCC!important}
+.CtxtMenu_MenuClose:hover:focus {  outline:none}
+</style><style type="text/css">.CtxtMenu_Menu {  position:absolute;  background-color:white;  color:black;  width:auto; padding:5px 0px;  border:1px solid #CCCCCC; margin:0; cursor:default;  font: menu; text-align:left; text-indent:0; text-transform:none;  line-height:normal; letter-spacing:normal; word-spacing:normal;  word-wrap:normal; white-space:nowrap; float:none; z-index:201;  border-radius: 5px;                     /* Opera 10.5 and IE9 */  -webkit-border-radius: 5px;             /* Safari and Chrome */  -moz-border-radius: 5px;                /* Firefox */  -khtml-border-radius: 5px;              /* Konqueror */  box-shadow:0px 10px 20px #808080;         /* Opera 10.5 and IE9 */  -webkit-box-shadow:0px 10px 20px #808080; /* Safari 3 & Chrome */  -moz-box-shadow:0px 10px 20px #808080;    /* Forefox 3.5 */  -khtml-box-shadow:0px 10px 20px #808080;  /* Konqueror */}
+.CtxtMenu_MenuItem {  padding: 1px 2em;  background:transparent;}
+.CtxtMenu_MenuArrow {  position:absolute; right:.5em; padding-top:.25em; color:#666666;  font-family: null; font-size: .75em}
+.CtxtMenu_MenuActive .CtxtMenu_MenuArrow {color:white}
+.CtxtMenu_MenuArrow.CtxtMenu_RTL {left:.5em; right:auto}
+.CtxtMenu_MenuCheck {  position:absolute; left:.7em;  font-family: null}
+.CtxtMenu_MenuCheck.CtxtMenu_RTL { right:.7em; left:auto }
+.CtxtMenu_MenuRadioCheck {  position:absolute; left: .7em;}
+.CtxtMenu_MenuRadioCheck.CtxtMenu_RTL {  right: .7em; left:auto}
+.CtxtMenu_MenuInputBox {  padding-left: 1em; right:.5em; color:#666666;  font-family: null;}
+.CtxtMenu_MenuInputBox.CtxtMenu_RTL {  left: .1em;}
+.CtxtMenu_MenuComboBox {  left:.1em; padding-bottom:.5em;}
+.CtxtMenu_MenuSlider {  left: .1em;}
+.CtxtMenu_SliderValue {  position:absolute; right:.1em; padding-top:.25em; color:#333333;  font-size: .75em}
+.CtxtMenu_SliderBar {  outline: none; background: #d3d3d3}
+.CtxtMenu_MenuLabel {  padding: 1px 2em 3px 1.33em;  font-style:italic}
+.CtxtMenu_MenuRule {  border-top: 1px solid #DDDDDD;  margin: 4px 3px;}
+.CtxtMenu_MenuDisabled {  color:GrayText}
+.CtxtMenu_MenuActive {  background-color: #606872;  color: white;}
+.CtxtMenu_MenuDisabled:focus {  background-color: #E8E8E8}
+.CtxtMenu_MenuLabel:focus {  background-color: #E8E8E8}
+.CtxtMenu_ContextMenu:focus {  outline:none}
+.CtxtMenu_ContextMenu .CtxtMenu_MenuItem:focus {  outline:none}
+.CtxtMenu_SelectionMenu {  position:relative; float:left;  border-bottom: none; -webkit-box-shadow:none; -webkit-border-radius:0px; }
+.CtxtMenu_SelectionItem {  padding-right: 1em;}
+.CtxtMenu_Selection {  right: 40%; width:50%; }
+.CtxtMenu_SelectionBox {  padding: 0em; max-height:20em; max-width: none;  background-color:#FFFFFF;}
+.CtxtMenu_SelectionDivider {  clear: both; border-top: 2px solid #000000;}
+.CtxtMenu_Menu .CtxtMenu_MenuClose {  top:-10px; left:-10px}
+</style><style id="MJX-CHTML-styles">
+mjx-container[jax="CHTML"] {
+  line-height: 0;
+}
+
+mjx-container [space="1"] {
+  margin-left: .111em;
+}
+
+mjx-container [space="2"] {
+  margin-left: .167em;
+}
+
+mjx-container [space="3"] {
+  margin-left: .222em;
+}
+
+mjx-container [space="4"] {
+  margin-left: .278em;
+}
+
+mjx-container [space="5"] {
+  margin-left: .333em;
+}
+
+mjx-container [rspace="1"] {
+  margin-right: .111em;
+}
+
+mjx-container [rspace="2"] {
+  margin-right: .167em;
+}
+
+mjx-container [rspace="3"] {
+  margin-right: .222em;
+}
+
+mjx-container [rspace="4"] {
+  margin-right: .278em;
+}
+
+mjx-container [rspace="5"] {
+  margin-right: .333em;
+}
+
+mjx-container [size="s"] {
+  font-size: 70.7%;
+}
+
+mjx-container [size="ss"] {
+  font-size: 50%;
+}
+
+mjx-container [size="Tn"] {
+  font-size: 60%;
+}
+
+mjx-container [size="sm"] {
+  font-size: 85%;
+}
+
+mjx-container [size="lg"] {
+  font-size: 120%;
+}
+
+mjx-container [size="Lg"] {
+  font-size: 144%;
+}
+
+mjx-container [size="LG"] {
+  font-size: 173%;
+}
+
+mjx-container [size="hg"] {
+  font-size: 207%;
+}
+
+mjx-container [size="HG"] {
+  font-size: 249%;
+}
+
+mjx-container [width="full"] {
+  width: 100%;
+}
+
+mjx-box {
+  display: inline-block;
+}
+
+mjx-block {
+  display: block;
+}
+
+mjx-itable {
+  display: inline-table;
+}
+
+mjx-row {
+  display: table-row;
+}
+
+mjx-row > * {
+  display: table-cell;
+}
+
+mjx-mtext {
+  display: inline-block;
+}
+
+mjx-mstyle {
+  display: inline-block;
+}
+
+mjx-merror {
+  display: inline-block;
+  color: red;
+  background-color: yellow;
+}
+
+mjx-mphantom {
+  visibility: hidden;
+}
+
+_::-webkit-full-page-media, _:future, :root mjx-container {
+  will-change: opacity;
+}
+
+mjx-assistive-mml {
+  position: absolute !important;
+  top: 0px;
+  left: 0px;
+  clip: rect(1px, 1px, 1px, 1px);
+  padding: 1px 0px 0px 0px !important;
+  border: 0px !important;
+  display: block !important;
+  width: auto !important;
+  overflow: hidden !important;
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  -khtml-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+  user-select: none;
+}
+
+mjx-assistive-mml[display="block"] {
+  width: 100% !important;
+}
+
+mjx-c::before {
+  display: block;
+  width: 0;
+}
+
+.MJX-TEX {
+  font-family: MJXZERO, MJXTEX;
+}
+
+.TEX-B {
+  font-family: MJXZERO, MJXTEX-B;
+}
+
+.TEX-I {
+  font-family: MJXZERO, MJXTEX-I;
+}
+
+.TEX-MI {
+  font-family: MJXZERO, MJXTEX-MI;
+}
+
+.TEX-BI {
+  font-family: MJXZERO, MJXTEX-BI;
+}
+
+.TEX-S1 {
+  font-family: MJXZERO, MJXTEX-S1;
+}
+
+.TEX-S2 {
+  font-family: MJXZERO, MJXTEX-S2;
+}
+
+.TEX-S3 {
+  font-family: MJXZERO, MJXTEX-S3;
+}
+
+.TEX-S4 {
+  font-family: MJXZERO, MJXTEX-S4;
+}
+
+.TEX-A {
+  font-family: MJXZERO, MJXTEX-A;
+}
+
+.TEX-C {
+  font-family: MJXZERO, MJXTEX-C;
+}
+
+.TEX-CB {
+  font-family: MJXZERO, MJXTEX-CB;
+}
+
+.TEX-FR {
+  font-family: MJXZERO, MJXTEX-FR;
+}
+
+.TEX-FRB {
+  font-family: MJXZERO, MJXTEX-FRB;
+}
+
+.TEX-SS {
+  font-family: MJXZERO, MJXTEX-SS;
+}
+
+.TEX-SSB {
+  font-family: MJXZERO, MJXTEX-SSB;
+}
+
+.TEX-SSI {
+  font-family: MJXZERO, MJXTEX-SSI;
+}
+
+.TEX-SC {
+  font-family: MJXZERO, MJXTEX-SC;
+}
+
+.TEX-T {
+  font-family: MJXZERO, MJXTEX-T;
+}
+
+.TEX-V {
+  font-family: MJXZERO, MJXTEX-V;
+}
+
+.TEX-VB {
+  font-family: MJXZERO, MJXTEX-VB;
+}
+
+mjx-stretchy-v mjx-c, mjx-stretchy-h mjx-c {
+  font-family: MJXZERO, MJXTEX-S1, MJXTEX-S4, MJXTEX, MJXTEX-A ! important;
+}
+
+@font-face /* 0 */ {
+  font-family: MJXZERO;
+  src: url("https://cdn.jsdelivr.net/npm/mathjax@3/es5/output/chtml/fonts/woff-v2/MathJax_Zero.woff") format("woff");
+}
+
+@font-face /* 1 */ {
+  font-family: MJXTEX;
+  src: url("https://cdn.jsdelivr.net/npm/mathjax@3/es5/output/chtml/fonts/woff-v2/MathJax_Main-Regular.woff") format("woff");
+}
+
+@font-face /* 2 */ {
+  font-family: MJXTEX-B;
+  src: url("https://cdn.jsdelivr.net/npm/mathjax@3/es5/output/chtml/fonts/woff-v2/MathJax_Main-Bold.woff") format("woff");
+}
+
+@font-face /* 3 */ {
+  font-family: MJXTEX-I;
+  src: url("https://cdn.jsdelivr.net/npm/mathjax@3/es5/output/chtml/fonts/woff-v2/MathJax_Math-Italic.woff") format("woff");
+}
+
+@font-face /* 4 */ {
+  font-family: MJXTEX-MI;
+  src: url("https://cdn.jsdelivr.net/npm/mathjax@3/es5/output/chtml/fonts/woff-v2/MathJax_Main-Italic.woff") format("woff");
+}
+
+@font-face /* 5 */ {
+  font-family: MJXTEX-BI;
+  src: url("https://cdn.jsdelivr.net/npm/mathjax@3/es5/output/chtml/fonts/woff-v2/MathJax_Math-BoldItalic.woff") format("woff");
+}
+
+@font-face /* 6 */ {
+  font-family: MJXTEX-S1;
+  src: url("https://cdn.jsdelivr.net/npm/mathjax@3/es5/output/chtml/fonts/woff-v2/MathJax_Size1-Regular.woff") format("woff");
+}
+
+@font-face /* 7 */ {
+  font-family: MJXTEX-S2;
+  src: url("https://cdn.jsdelivr.net/npm/mathjax@3/es5/output/chtml/fonts/woff-v2/MathJax_Size2-Regular.woff") format("woff");
+}
+
+@font-face /* 8 */ {
+  font-family: MJXTEX-S3;
+  src: url("https://cdn.jsdelivr.net/npm/mathjax@3/es5/output/chtml/fonts/woff-v2/MathJax_Size3-Regular.woff") format("woff");
+}
+
+@font-face /* 9 */ {
+  font-family: MJXTEX-S4;
+  src: url("https://cdn.jsdelivr.net/npm/mathjax@3/es5/output/chtml/fonts/woff-v2/MathJax_Size4-Regular.woff") format("woff");
+}
+
+@font-face /* 10 */ {
+  font-family: MJXTEX-A;
+  src: url("https://cdn.jsdelivr.net/npm/mathjax@3/es5/output/chtml/fonts/woff-v2/MathJax_AMS-Regular.woff") format("woff");
+}
+
+@font-face /* 11 */ {
+  font-family: MJXTEX-C;
+  src: url("https://cdn.jsdelivr.net/npm/mathjax@3/es5/output/chtml/fonts/woff-v2/MathJax_Calligraphic-Regular.woff") format("woff");
+}
+
+@font-face /* 12 */ {
+  font-family: MJXTEX-CB;
+  src: url("https://cdn.jsdelivr.net/npm/mathjax@3/es5/output/chtml/fonts/woff-v2/MathJax_Calligraphic-Bold.woff") format("woff");
+}
+
+@font-face /* 13 */ {
+  font-family: MJXTEX-FR;
+  src: url("https://cdn.jsdelivr.net/npm/mathjax@3/es5/output/chtml/fonts/woff-v2/MathJax_Fraktur-Regular.woff") format("woff");
+}
+
+@font-face /* 14 */ {
+  font-family: MJXTEX-FRB;
+  src: url("https://cdn.jsdelivr.net/npm/mathjax@3/es5/output/chtml/fonts/woff-v2/MathJax_Fraktur-Bold.woff") format("woff");
+}
+
+@font-face /* 15 */ {
+  font-family: MJXTEX-SS;
+  src: url("https://cdn.jsdelivr.net/npm/mathjax@3/es5/output/chtml/fonts/woff-v2/MathJax_SansSerif-Regular.woff") format("woff");
+}
+
+@font-face /* 16 */ {
+  font-family: MJXTEX-SSB;
+  src: url("https://cdn.jsdelivr.net/npm/mathjax@3/es5/output/chtml/fonts/woff-v2/MathJax_SansSerif-Bold.woff") format("woff");
+}
+
+@font-face /* 17 */ {
+  font-family: MJXTEX-SSI;
+  src: url("https://cdn.jsdelivr.net/npm/mathjax@3/es5/output/chtml/fonts/woff-v2/MathJax_SansSerif-Italic.woff") format("woff");
+}
+
+@font-face /* 18 */ {
+  font-family: MJXTEX-SC;
+  src: url("https://cdn.jsdelivr.net/npm/mathjax@3/es5/output/chtml/fonts/woff-v2/MathJax_Script-Regular.woff") format("woff");
+}
+
+@font-face /* 19 */ {
+  font-family: MJXTEX-T;
+  src: url("https://cdn.jsdelivr.net/npm/mathjax@3/es5/output/chtml/fonts/woff-v2/MathJax_Typewriter-Regular.woff") format("woff");
+}
+
+@font-face /* 20 */ {
+  font-family: MJXTEX-V;
+  src: url("https://cdn.jsdelivr.net/npm/mathjax@3/es5/output/chtml/fonts/woff-v2/MathJax_Vector-Regular.woff") format("woff");
+}
+
+@font-face /* 21 */ {
+  font-family: MJXTEX-VB;
+  src: url("https://cdn.jsdelivr.net/npm/mathjax@3/es5/output/chtml/fonts/woff-v2/MathJax_Vector-Bold.woff") format("woff");
+}
+</style></head>
+  <body>
+        <a id="skip-to-content" href="https://yoavg.github.io/llm-class-2025-2026/ass2-architectural-choices-tokenizers-finetuning/#content">Skip to the content.</a>
+
+    <main id="content" class="main-content" role="main">
+      <h1 id="assignment-2-architectural-choices-tokenizers-decoding-and-fine-tuning">Assignment 2: Architectural Choices, Tokenizers, Decoding, and Fine Tuning</h1>
+
+<h2 id="architectural-choices">Architectural Choices</h2>
+
+<p>Huggingface is s software company that hosts a repository of models, both LLMs and others. These are models you can download, inspect, run and finetune.</p>
+
+<p>In this part of the assignment you will explore some recent LLMs from the huggingface model library, and inspect their architectural choices.</p>
+
+<p>We will be working with the following models:</p>
+<ol>
+  <li><a href="https://huggingface.co/meta-llama/Llama-3.1-8B-Instruct"><code class="language-plaintext highlighter-rouge">meta-llama/Llama-3.1-8B-Instruct</code></a></li>
+  <li><a href="https://huggingface.co/mistralai/Mistral-7B-Instruct-v0.3"><code class="language-plaintext highlighter-rouge">mistralai/Mistral-7B-Instruct-v0.3</code></a></li>
+  <li><a href="https://huggingface.co/Qwen/Qwen2.5-7B-Instruct"><code class="language-plaintext highlighter-rouge">Qwen/Qwen2.5-7B-Instruct</code></a></li>
+  <li><a href="https://huggingface.co/allenai/OLMo-2-1124-7B-Instruct"><code class="language-plaintext highlighter-rouge">allenai/OLMo-2-1124-7B-Instruct</code></a></li>
+  <li><a href="https://huggingface.co/ibm-granite/granite-3.3-8b-instruct"><code class="language-plaintext highlighter-rouge">ibm-granite/granite-3.3-8b-instruct</code></a></li>
+  <li><a href="https://huggingface.co/deepseek-ai/DeepSeek-V3"><code class="language-plaintext highlighter-rouge">deepseek-ai/DeepSeek-V3</code></a></li>
+  <li><a href="https://huggingface.co/HuggingFaceTB/SmolLM2-1.7B-Instruct"><code class="language-plaintext highlighter-rouge">HuggingFaceTB/SmolLM2-1.7B-Instruct</code></a></li>
+  <li><a href="https://huggingface.co/microsoft/Phi-4-mini-instruct"><code class="language-plaintext highlighter-rouge">microsoft/Phi-4-mini-instruct</code></a></li>
+  <li><a href="https://huggingface.co/tiiuae/Falcon3-7B-Instruct"><code class="language-plaintext highlighter-rouge">tiiuae/Falcon3-7B-Instruct</code></a></li>
+  <li><a href="https://huggingface.co/dicta-il/dictalm2.0-instruct"><code class="language-plaintext highlighter-rouge">dicta-il/dictalm2.0-instruct</code></a></li>
+</ol>
+
+<h3 id="extract-architectural-information">Extract architectural information</h3>
+
+<p>For each model, I want you to list:</p>
+<ol>
+  <li>Number of layers, width of layers</li>
+  <li>Number of attention heads</li>
+  <li>Sizes of everything: if it has MLP layers, what dimensions are they? if it has MoE layers, how many experts, and what are the dimensions involved? what are the dimensions of the different attention components? what are the sizes of the embeddings and the unembedding layers? etc.</li>
+  <li>How does it handle position encoding? does the method have a max position it supports? if so, what is it? does the method have hyper-parameters? if so, what are they and what values do they take?</li>
+  <li>What activations are used? is it the same activation everywhere, or do they mix different kinds?</li>
+  <li>What kind of normalizations are used, and on which components? is the model using pre-norm, post-norm, or something else?</li>
+  <li>Any other property of interest you may think of.</li>
+</ol>
+
+<p>Some of these properties may be easier to extract than others. Part of the assignment is figuring out how to locate this information the most easily.
+For each property you extract, mention (in your report) where you extracted it from and how.</p>
+
+<p>In the report, include:</p>
+
+<ol>
+  <li>A short explanation of how you extracted the architectural information.</li>
+  <li>Any uncertainty, missing fields, or disagreements between sources.</li>
+  <li>A readable summary of the main architectural differences between the models.</li>
+  <li>The reflection and analysis requested below.</li>
+</ol>
+
+<p>In addition to the report, submit <a href="https://yoavg.github.io/llm-class-2025-2026/ass2-architectural-choices-tokenizers-finetuning/architecture.csv"><code class="language-plaintext highlighter-rouge">architecture.csv</code></a>. This file is for the structured model-by-model facts, not for long explanations. It should contain one row per model and include, when available, the following columns:</p>
+
+<div class="language-text highlighter-rouge"><div class="highlight"><pre class="highlight"><code>model_id,hidden_size,num_layers,num_attention_heads,num_kv_heads,mlp_size,activation,norm_type,position_encoding,context_length,vocab_size,moe_details
+</code></pre></div></div>
+<p>Use <code class="language-plaintext highlighter-rouge">NA</code> for fields that do not apply or that you could not find.</p>
+
+<h3 id="organize-reflect-and-analyze">Organize, reflect and analyze</h3>
+
+<p>Inspect the extracted information and try to reach some general trends. I want to see some interesting insights about differences and commonalities in architectural choices.</p>
+
+<p>Some kinds of questions to consider: are there choices that are consistent in all or most models? are there choices in which there is no consensus? are some specific models deviating from the norm? are there some ratios or rules of thumb that govern sizing choices (that is, “size x is often chosen to be k times the size of y”, or “size x is often a power of 10”)? etc</p>
+
+<p>Based on these choices, if you were to build a new model, what settings would you choose?</p>
+
+<h2 id="tokenizers">Tokenizers</h2>
+
+<p>One architectural choice we did not cover is the tokenization. We will cover it now.</p>
+
+<p>Consider the tokenizers of the 10 models above.</p>
+
+<h3 id="architectural-choices-1">Architectural choices</h3>
+
+<ul>
+  <li>How many tokens are there in the tokenizer?</li>
+  <li>What strategy is the tokenizer using for indicating that a token is not an incomplete word? how are tokens supposed to merge back to words?</li>
+  <li>Are there tokens that do not corresponds to words or parts of words? How many, what kind of things to they encode, and how are they represented?</li>
+  <li>For each tokenizer, compute or estimate the average number of tokens per word for English and for Hebrew. Explain exactly how you computed or estimated this number, and what assumptions your method relies on.</li>
+</ul>
+
+<p>Note that some of these answers may repeat across models. It is ok to respond with “the same as in model X” if that is indeed the case.</p>
+
+<p>In the report, include:</p>
+
+<ol>
+  <li>A short explanation of how you inspected the tokenizers.</li>
+  <li>How you computed or estimated the average-tokens-per-word numbers.</li>
+  <li>How you counted words.</li>
+  <li>The tokenization-differences example requested below.</li>
+  <li>A discussion of the average-tokens-per-word numbers and what does it mean.</li>
+</ol>
+
+<p>In addition to the report, submit <a href="https://yoavg.github.io/llm-class-2025-2026/ass2-architectural-choices-tokenizers-finetuning/tokenizers.csv"><code class="language-plaintext highlighter-rouge">tokenizers.csv</code></a>. This file is for the structured tokenizer facts. It should contain one row per model and include, when available, the following columns:</p>
+
+<div class="language-text highlighter-rouge"><div class="highlight"><pre class="highlight"><code>model_id,tokenizer_type,vocab_size,special_tokens,word_boundary_strategy,byte_fallback_or_byte_level,avg_tokens_per_english_word,avg_tokens_per_hebrew_word
+</code></pre></div></div>
+<p>Use <code class="language-plaintext highlighter-rouge">NA</code> for fields that do not apply or that you could not find.</p>
+
+<h3 id="tokenization-differences">Tokenization differences</h3>
+
+<p>Find an English text that is tokenized differently by at least three models. Provide the text, the different tokenizations by the three models, and a short description of what you think could be the cause of the difference.</p>
+
+<p>How many of the remaining 7 tokenizers agree with each of the 3 tokenizers on this text?</p>
+
+<h2 id="constrained-decoding">Constrained Decoding</h2>
+
+<h3 id="get-basic-inference-working">Get basic inference working</h3>
+
+<p>Load the <a href="https://huggingface.co/Qwen/Qwen2.5-7B-Instruct"><code class="language-plaintext highlighter-rouge">Qwen/Qwen2.5-7B-Instruct</code></a> model and the <a href="https://huggingface.co/mistralai/Mistral-7B-Instruct-v0.3"><code class="language-plaintext highlighter-rouge">mistralai/Mistral-7B-Instruct-v0.3</code></a> model, and see that you manage to query them with prompts containing English questions and obtain reasonable answers.</p>
+
+<p>These are instruction-tuned models (“instruct” models). This means they are not only trained to continue text, but were further trained to respond to user instructions, usually in a chat-like format with user and assistant turns. When running them, make sure you use the tokenizer’s chat template or the prompting format recommended by the model card; otherwise the model may behave worse than expected.</p>
+
+<h3 id="identify-hebrew-related-tokens">Identify Hebrew-related tokens</h3>
+
+<p>For each of these two models, identify all the tokens in the tokenizer that are may participate in Hebrew text. This should include numbers and punctuation, but not words in other languages. (what was your strategy for identifying these tokens?)</p>
+
+<p>Submit one JSON file per model with the Hebrew-allowed token set. Name the files:</p>
+
+<ol>
+  <li><code class="language-plaintext highlighter-rouge">hebrew_allowed_tokens_qwen.json</code></li>
+  <li><code class="language-plaintext highlighter-rouge">hebrew_allowed_tokens_mistral.json</code></li>
+</ol>
+
+<p>Each file should use the following structure:</p>
+
+<div class="language-json highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="p">{</span><span class="w">
+  </span><span class="nl">"model_id"</span><span class="p">:</span><span class="w"> </span><span class="s2">"..."</span><span class="p">,</span><span class="w">
+  </span><span class="nl">"allowed_token_ids"</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="mi">2</span><span class="p">,</span><span class="w"> </span><span class="mi">3</span><span class="p">]</span><span class="w">
+</span><span class="p">}</span><span class="w">
+</span></code></pre></div></div>
+
+<p>The full explanation of the token-selection strategy should be in the report.</p>
+
+<h3 id="constrained-decoding-1">Constrained decoding</h3>
+
+<p>Modify the inference procedure to do simple constrained decoding of the following form: only allow the tokens from the set identified above to be generated.</p>
+
+<p>Run the English queries from above (or others) using the constrained decoder. What answers do you get from each model?</p>
+
+<ol>
+  <li>How did you implement the constrained decoding? describe briefly.</li>
+  <li>List 10 English language queries, and for each of them, for each model: (a) the model response with unconstrained decoding; (b) the model response with constrained decoding.</li>
+  <li>A brief discussion of the results. Is the Hebrew text meaningful? does it relate to the question? does it differ between the models? are some languages favored over others?</li>
+</ol>
+
+<p>Submit the decoding results in a file named <code class="language-plaintext highlighter-rouge">decoding_outputs.jsonl</code>. Each line should include: prompt, model, unconstrained output, and constrained output.</p>
+
+<p>Each line should be a separate JSON object, for example:</p>
+
+<div class="language-json highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="p">{</span><span class="nl">"prompt"</span><span class="p">:</span><span class="s2">"Explain why leaves are green."</span><span class="p">,</span><span class="nl">"model"</span><span class="p">:</span><span class="s2">"Qwen/Qwen2.5-7B-Instruct"</span><span class="p">,</span><span class="nl">"unconstrained_output"</span><span class="p">:</span><span class="s2">"..."</span><span class="p">,</span><span class="nl">"constrained_output"</span><span class="p">:</span><span class="s2">"..."</span><span class="p">}</span><span class="w">
+</span></code></pre></div></div>
+
+<p>The report should contain the explanation and discussion: how you implemented constrained decoding, and what you conclude from the outputs. The JSON and JSONL files are for the raw token lists and generation outputs.</p>
+
+<h2 id="fine-tuning">Fine Tuning</h2>
+
+<p>In the previous section, you attempted to adapt a model to answer in Hebrew on English queries by intervening with the decoding procedure. Now we will do it with fine tuning.</p>
+
+<p>You will be working with the <a href="https://huggingface.co/Qwen/Qwen2.5-1.5B-Instruct"><code class="language-plaintext highlighter-rouge">Qwen/Qwen2.5-1.5B-Instruct</code></a> model. This is a relatively small model, that should be easy to load and fine-tune also on a relatively weak GPU, like the ones available in Google Colab. It also has some basic knowledge of Hebrew, as you can see by prompting it in Hebrew and observing its answers.</p>
+
+<p>Your job is to fine-tune the model so that it answers in Hebrew also on English queries. Ideally, the answers should be relevant to the query prompt (that is, it is easy to tune the model to always return a fixed Hebrew sentence like “לא יודע” but this is not a valid solution. The model should at least appear to be attempt to answer the prompt question/instruction, even if it will get it wrong).</p>
+
+<p>This part of the assignment is open ended, that is on purpose. You are free and encouraged to explore various approaches, to find the one that works best. At the end it will boil down to “supervised fine tuning” (SFT): providing the model with input-output example pairs, and training it to follow them, with hope of generalization. So the task has two parts: creating the data, and training on the data you created. These parts may be interleaved, as data creation choices may be informed by experience with training on it.</p>
+
+<h3 id="data">Data</h3>
+
+<p>For obtaining the training data, you can either find relevant training data for this task, or create your own. Creating your own can be done from scratch, or based on some existing data which you will modify. You can also use queries to LLM to help you in creating the data, either in performing transformations (for example, translation) on existing data, or creating new data from scratch based on your instructions. Do whatever is the most effective for performing the task.</p>
+
+<p>Your training data must not include the evaluation inputs used in the “Did it work?” section below.</p>
+
+<h3 id="fine-tuning-1">Fine-tuning</h3>
+
+<p>For fine-tuning the model, you can either use full fine tuning, or a method for lightweight fine-tuning such as LoRA (we will learn about LoRA later in the course, but you can use it also without this knowledge). It is always a good idea to see that you can get basic fine-tuning to work on a very simple task (for example, overfit it to always answer a given prompt with a given answer) before attempting an open-ended one for the first time. This way you will know that you at least have the basic mechanics of training to work. Here are some additional technical tips on fine-tuning that you may find useful:</p>
+
+<ol>
+  <li>LoRA is recommended over full fine tuning. The main library for LoRA in the Hugging Face ecosystem is <code class="language-plaintext highlighter-rouge">peft</code>.</li>
+  <li>Start by checking that regular inference works before training.</li>
+  <li>Then try to overfit a tiny dataset of one or two examples. This is a useful sanity check that training is actually changing the model.</li>
+  <li>Use the model’s chat template consistently for both training and inference.</li>
+  <li>Make sure the training examples match the actual task: English prompt in, Hebrew answer out.</li>
+</ol>
+
+<h3 id="did-it-work">Did it work?</h3>
+
+<p>Finally, you will have to prove that your fine-tuning worked. This part is also left open-ended. Do something to convince us that the method worked, and the model is behaving as expected. The common way to do it is by (a) constructing an evaluation set and measuring some performance metrics on it; and (b) showing some anecdotal input-output pairs both before and after fine-tuning. Both of these parts are needed, but the composition of each part is left up to you. Describe you choices and try to convince us.</p>
+
+<p>For evaluation, run both the original model and your fine-tuned model on:</p>
+
+<ol>
+  <li>10 English inputs provided in the assignment.</li>
+  <li>10 additional English inputs of your own choice.</li>
+</ol>
+
+<p>Use these 10 English evaluation inputs:</p>
+
+<ol>
+  <li>Explain why the sky looks blue during the day.</li>
+  <li>Give two advantages and two disadvantages of public transportation.</li>
+  <li>Write a short email asking a professor for an extension on an assignment.</li>
+  <li>Describe how to make a simple omelette.</li>
+  <li>What is the difference between supervised and unsupervised learning?</li>
+  <li>Summarize the story of Cinderella in three sentences.</li>
+  <li>Suggest three ways to reduce smartphone distraction while studying.</li>
+  <li>Explain what happens when water boils.</li>
+  <li>Give a polite refusal to an invitation to a party.</li>
+  <li>Turn the idea “practice makes progress” into advice for a student.</li>
+</ol>
+
+<p>The training data must not include any of these 20 evaluation inputs.</p>
+
+<p>In the report, include the outputs on all 20 inputs and explain what changed after fine-tuning. You may also include quantitative summaries, such as the percent of answers that are in Hebrew and a manual relevance score.</p>
+
+<p>Submit these results in a file named <code class="language-plaintext highlighter-rouge">eval_outputs.jsonl</code>. Each line should include: prompt, base-model output, fine-tuned-model output, and short notes if relevant.</p>
+
+<p>Each line should be a separate JSON object, for example:</p>
+
+<div class="language-json highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="p">{</span><span class="nl">"prompt"</span><span class="p">:</span><span class="s2">"Explain why the sky looks blue during the day."</span><span class="p">,</span><span class="nl">"base_output"</span><span class="p">:</span><span class="s2">"..."</span><span class="p">,</span><span class="nl">"finetuned_output"</span><span class="p">:</span><span class="s2">"..."</span><span class="p">,</span><span class="nl">"notes"</span><span class="p">:</span><span class="s2">"..."</span><span class="p">}</span><span class="w">
+</span></code></pre></div></div>
+
+<p>The report should contain the explanation and conclusions: how you created the data, how you fine-tuned the model, what evaluation you ran, and whether you think the fine-tuning worked. <code class="language-plaintext highlighter-rouge">eval_outputs.jsonl</code> is for the raw before/after generations.</p>
+
+<h2 id="what-to-submit">What to Submit</h2>
+
+<p>A report in PDF format. The report should cover answers and discussions of all the sections and subsections mentioned above, and it should be easy to navigate and locate the individual sections and their answers. The report should also contain your names and ID numbers in a prominent font at the top.</p>
+
+<p>Large part of your grade will be based on the report quality and clarity: the report is the main window we have into your work. So you are encouraged to put some effort into it.</p>
+
+<p>In addition to the report, submit:</p>
+
+<ol>
+  <li><a href="https://yoavg.github.io/llm-class-2025-2026/ass2-architectural-choices-tokenizers-finetuning/architecture.csv"><code class="language-plaintext highlighter-rouge">architecture.csv</code></a></li>
+  <li><a href="https://yoavg.github.io/llm-class-2025-2026/ass2-architectural-choices-tokenizers-finetuning/tokenizers.csv"><code class="language-plaintext highlighter-rouge">tokenizers.csv</code></a></li>
+  <li><code class="language-plaintext highlighter-rouge">hebrew_allowed_tokens_qwen.json</code></li>
+  <li><code class="language-plaintext highlighter-rouge">hebrew_allowed_tokens_mistral.json</code></li>
+  <li><code class="language-plaintext highlighter-rouge">decoding_outputs.jsonl</code></li>
+  <li><code class="language-plaintext highlighter-rouge">eval_outputs.jsonl</code></li>
+  <li>The code used to identify tokens, perform constrained decoding, create or process the data, fine-tune the model, and run the evaluation.</li>
+  <li>The training data, if it fits in Moodle.</li>
+</ol>
+
+<p>If the training data has more than 1000 examples, submit the first 1000 examples. This does not mean your data has to be of this size; it can also be either much smaller or much larger. If the full training data does not fit in Moodle, submit a representative sample plus the script or method used to generate it.</p>
+
+<p>Do not submit full model weights. If you trained a LoRA adapter and it is small enough, you may submit it, but the report and required output files should be sufficient for grading.</p>
+
+
+    </main>
+  
+
+</body></html>

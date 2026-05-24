@@ -1,0 +1,11 @@
+model_id,hidden_size,num_layers,num_attention_heads,num_kv_heads,mlp_size,activation,norm_type,position_encoding,context_length,vocab_size,moe_details
+meta-llama/Llama-3.1-8B-Instruct,4096,32,32,8,14336,SwiGLU,RMSNorm,"RoPE/llama3 (theta=500000, scale=8.0, low_freq=1.0, high_freq=4.0, orig_max=8192, ctx=131072)",131072,128256,NA
+mistralai/Mistral-7B-Instruct-v0.3,4096,32,32,8,14336,SiLU,RMSNorm,"RoPE (theta=1000000, ctx=32768; SWA=null in v0.3)",32768,32768,NA
+Qwen/Qwen2.5-7B-Instruct,3584,28,28,4,18944,SiLU,RMSNorm,"RoPE+YaRN (theta=1000000, base_ctx=32768, ext_ctx=131072, yarn_factor=4.0)",131072,152064,NA
+allenai/OLMo-2-1124-7B-Instruct,4096,32,32,32,11008,SiLU,RMSNorm,"RoPE (theta=500000, ctx=4096, no scaling)",4096,100352,NA
+ibm-granite/granite-3.3-8b-instruct,4096,40,32,8,12800,SwiGLU,RMSNorm,RoPE (ctx=128000; theta/scaling not in sources),128000,NA,NA
+deepseek-ai/DeepSeek-V3,7168,61,128,NA,2048,SwiGLU,RMSNorm,"Decoupled RoPE in MLA (d_hR=64, ctx=131072, YaRN s=40 a=1 b=32)",131072,128000,257 experts/layer (1 shared + 256 routed); 9 active/token (1+8); 671B total; 37B active
+HuggingFaceTB/SmolLM2-1.7B-Instruct,2048,24,32,32,8192,SiLU,RMSNorm,"RoPE (theta=130000, ctx=8192, no scaling)",8192,49152,NA
+microsoft/Phi-4-mini-instruct,3072,32,24,8,8192,SiLU,RMSNorm,"LongRoPE (theta=10000, partial_rot=0.75, orig_max=4096, ext_max=131072)",131072,200064,NA
+tiiuae/Falcon3-7B-Instruct,3072,28,12,4,23040,SwiGLU,RMSNorm,"RoPE (theta=1000042, head_dim=256, ctx=32768, no scaling)",32768,131072,NA
+dicta-il/dictalm2.0-instruct,4096,32,32,8,14336,SiLU,RMSNorm,"RoPE (theta=10000, ctx=32768, no scaling)",32768,33152,NA

@@ -1,0 +1,975 @@
+% ============================================================
+%  Assignment 2: Architectural Choices, Tokenizers, Decoding, and Fine Tuning
+% ============================================================
+\documentclass[11pt, a4paper]{article}
+
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage[margin=2.5cm]{geometry}
+\usepackage{booktabs}
+\usepackage{array}
+\usepackage{longtable}
+\usepackage{amsmath}
+\usepackage{hyperref}
+\usepackage{xcolor}
+\usepackage{enumitem}
+\usepackage{float}
+\usepackage{caption}
+
+\hypersetup{
+    colorlinks=true,
+    linkcolor=blue!60!black,
+    urlcolor=blue!60!black,
+    citecolor=blue!60!black,
+}
+
+\setlength{\parskip}{4pt}
+\setlength{\parindent}{0pt}
+
+% Helper column types
+\newcolumntype{L}[1]{>{\raggedright\arraybackslash}p{#1}}
+\newcolumntype{R}[1]{>{\raggedleft\arraybackslash}p{#1}}
+\newcolumntype{C}[1]{>{\centering\arraybackslash}p{#1}}
+
+% SentencePiece word-start marker (U+2581 — not in standard TeX fonts)
+\newcommand{\spmark}{\rule[0.18ex]{0.65em}{0.11ex}}
+
+\newcommand{\src}[1]{\textsuperscript{\normalfont\small[#1]}}
+
+\title{\textbf{Assignment 2}\\[6pt]
+       \large Architectural Choices, Tokenizers, Decoding, and Fine Tuning}
+\author{}
+\date{May 2026}
+
+
+\begin{document}
+\maketitle
+\tableofcontents
+\newpage
+
+% ============================================================
+\section{Part 1 - Architectural Choices}
+% ============================================================
+
+% ----------------------------------------------------------
+\subsection{Extraction Methodology}
+% ----------------------------------------------------------
+
+Architectural information for each model was gathered using \textbf{NotebookLM};
+I ran a deep research experiment to collect sources for all models. 
+After gathering a reliable list of sources, I asked \textbf{NotebookLM} to retrieve the relevant information for each model, while including references to the sources.
+
+% ----------------------------------------------------------
+\subsection{Per-Model Architectural Details}
+% ----------------------------------------------------------
+
+% ........................................................
+\subsubsection{\texttt{meta-llama/Llama-3.1-8B-Instruct}}
+
+\paragraph{1.~Layers and width.}
+32 hidden layers\src{1}.
+The hidden size is described as ``typically 4096--5120'' without specifying the
+exact value for the 8B variant\src{1}; see Section~\ref{sec:uncertainty}.
+
+\paragraph{2.~Attention heads.}
+32 query heads per layer\src{1}.
+The model uses Grouped-Query Attention (GQA)\src{1,2};
+the exact number of KV heads is not reported in the available sources (see
+Section~\ref{sec:uncertainty}).
+
+\paragraph{3.~Component sizes.}
+Dense decoder-only architecture; no MoE layers\src{1}.
+Exact MLP intermediate size, attention head dimensions, and vocabulary and
+embedding matrix sizes are all absent from the sources.
+
+\paragraph{4.~Position encoding.}
+RoPE\src{1}, extended via the \textit{llama3} multi-scale scheme\src{3}.
+Context length: 128k tokens\src{2} (Source~1 states the tokenizer supports up to
+8,192 tokens - disagreement noted in Section~\ref{sec:uncertainty}).
+Scaling hyper-parameters: factor~=~8.0, low-freq factor~=~1.0,
+high-freq factor~=~4.0, original max positions~=~8,192,
+\texttt{rope\_type}~=~\texttt{llama3}\src{3}.
+
+\paragraph{5.~Activations.}
+SwiGLU, uniformly across all feed-forward sublayers\src{1}.
+
+\paragraph{6.~Normalization.}
+Pre-norm placement\src{1}.
+Sources describe the norm type as ``RMSNorm or LayerNorm'' without definitively
+specifying one\src{1}; RMSNorm is standard for this model family.
+
+\paragraph{7.~Other properties.}
+$\approx$8.03B total parameters\src{1}.
+Instruction-tuned via SFT + DPO/RLHF\src{1}.
+Supports 8 languages natively; knowledge cutoff December~2023\src{2}.
+Training used 1.46M GPU-hours on H100-80\,GB hardware, producing
+$\approx$420\,t\,CO\textsubscript{2}eq\src{2}.
+
+\noindent\textbf{Sources:}
+\begin{enumerate}[noitemsep,label=\small{[\arabic*]},leftmargin=*,topsep=2pt]
+\item \small\url{https://www.emergentmind.com/topics/llama-3-1-8b-instruct-679bb9c6-400c-4f7c-b10a-c1048d659134}
+\item \small\url{https://huggingface.co/meta-llama/Llama-3.1-8B-Instruct}
+\item \small\url{https://huggingface.co/meta-llama/Llama-3.1-8B-Instruct/discussions/15}
+\end{enumerate}
+
+% ........................................................
+\subsubsection{\texttt{mistralai/Mistral-7B-Instruct-v0.3}}
+
+\paragraph{1.~Layers and width.}
+32 hidden layers\src{2,3}; hidden size 4,096\src{2,3}.
+
+\paragraph{2.~Attention heads.}
+32 query heads, 8 KV heads (GQA, group size 4)\src{2,3}.
+Faster inference via GQA is highlighted in\src{1,2}.
+
+\paragraph{3.~Component sizes.}
+Dense decoder; no MoE.
+MLP intermediate size: 14,336 ($\approx3.5\times$ hidden)\src{2,3}.
+Attention head dimension: 128\src{2}.
+Vocabulary size: 32,768 (extended from 32,000 in v0.1/v0.2)\src{3,4}.
+Separate (untied) input and output embedding matrices; exact sizes inferred from
+hidden size and vocabulary.
+
+\paragraph{4.~Position encoding.}
+RoPE\src{2}; $\theta=1{,}000{,}000$; maximum context 32,768 tokens\src{3}.
+Sliding Window Attention (window~=~4,096) is architecturally
+supported\src{1,2}, but disabled (\texttt{sliding\_window: null}) in the v0.3
+configuration\src{3}.
+
+\paragraph{5.~Activations.}
+SiLU, uniformly across all MLP layers\src{3}.
+
+\paragraph{6.~Normalization.}
+RMSNorm, $\varepsilon=10^{-5}$\src{3}.
+Exact placement (pre- vs.\ post-norm) not stated in the sources; pre-norm is
+the standard for this family.
+
+\paragraph{7.~Other properties.}
+$\approx$7.3B parameters\src{1}.
+v0.3 release adds the v3 tokenizer and native function calling\src{4}.
+Apache~2.0 license\src{1,3,4}.
+
+\noindent\textbf{Sources:}
+\begin{enumerate}[noitemsep,label=\small{[\arabic*]},leftmargin=*,topsep=2pt]
+\item \small\url{https://mistral.ai/news/announcing-mistral-7b}
+\item \small\url{https://www.emergentmind.com/papers/mistral-7b-instruct}
+\item \small\url{https://huggingface.co/mistralai/Mistral-7B-Instruct-v0.3/blob/main/config.json}
+\item \small\url{https://huggingface.co/mistralai/Mistral-7B-Instruct-v0.3}
+\end{enumerate}
+
+% ........................................................
+\subsubsection{\texttt{Qwen/Qwen2.5-7B-Instruct}}
+
+\paragraph{1.~Layers and width.}
+28 hidden layers\src{1,2}; hidden size 3,584\src{2}.
+
+\paragraph{2.~Attention heads.}
+28 query heads, 4 KV heads (GQA, group size 7)\src{1,2}.
+
+\paragraph{3.~Component sizes.}
+Dense decoder; no MoE.
+MLP intermediate size: 18,944 ($\approx5.3\times$ hidden) - notably wider than
+peers\src{2}.
+Attention head dimension not explicitly stated; inferred as 128 ($3584/28$).
+Vocabulary size: 152,064\src{2}.
+7.61B total parameters (6.53B non-embedding)\src{1}.
+Untied input/output embeddings.
+
+\paragraph{4.~Position encoding.}
+RoPE with $\theta=1{,}000{,}000$\src{2}.
+Base context: 32,768 tokens\src{2}; extended to 131,072 via
+YaRN\src{1} (type=\texttt{yarn}, factor=4.0,
+\texttt{original\_max\_position\_embeddings}=32,768\src{1}).
+Generation is limited to 8,192 output tokens\src{1}.
+
+\paragraph{5.~Activations.}
+SiLU (\texttt{hidden\_act: silu}), uniformly\src{1,2}.
+
+\paragraph{6.~Normalization.}
+RMSNorm, $\varepsilon=10^{-6}$\src{1,2}.
+Exact placement not stated in the sources.
+
+\paragraph{7.~Other properties.}
+Uses \textbf{QKV bias} in attention projections - uncommon among modern
+models\src{1}.
+Supports 29+ languages\src{1}.
+Apache~2.0 license\src{1}.
+
+\noindent\textbf{Sources:}
+\begin{enumerate}[noitemsep,label=\small{[\arabic*]},leftmargin=*,topsep=2pt]
+\item \small\url{https://huggingface.co/Qwen/Qwen2.5-7B-Instruct}
+\item \small\url{https://huggingface.co/Qwen/Qwen2.5-7B-Instruct/blob/main/config.json}
+\end{enumerate}
+
+% ........................................................
+\subsubsection{\texttt{allenai/OLMo-2-1124-7B-Instruct}}
+
+\paragraph{1.~Layers and width.}
+32 hidden layers; hidden size 4,096\src{1}.
+
+\paragraph{2.~Attention heads.}
+32 query heads and 32 KV heads - full Multi-Head Attention (MHA), no
+KV-head reduction\src{1}.
+
+\paragraph{3.~Component sizes.}
+Dense decoder; no MoE.
+MLP intermediate size: 11,008 ($\approx2.7\times$ hidden)\src{1}.
+Head dimension inferred as 128 ($4096/32$).
+Vocabulary size: 100,352; embeddings not tied (\texttt{tie\_word\_embeddings:
+false})\src{1}.
+No attention bias and no MLP bias\src{1}.
+
+\paragraph{4.~Position encoding.}
+RoPE, $\theta=500{,}000$\src{1}.
+Maximum context: 4,096 tokens; \texttt{rope\_scaling} set to \texttt{null} -
+no additional scaling applied\src{1}.
+
+\paragraph{5.~Activations.}
+SiLU, uniformly\src{1}.
+
+\paragraph{6.~Normalization.}
+RMSNorm, $\varepsilon=10^{-6}$\src{1}.
+Exact placement not stated in the sources.
+
+\paragraph{7.~Other properties.}
+Post-trained via SFT + DPO + RLVR on the T-lu~3 dataset\src{2}.
+Base model pre-trained on the Dolma dataset\src{2}.
+All code, checkpoints, and training logs are publicly released\src{2}.
+
+\noindent\textbf{Sources:}
+\begin{enumerate}[noitemsep,label=\small{[\arabic*]},leftmargin=*,topsep=2pt]
+\item \small\url{https://huggingface.co/allenai/OLMo-2-1124-7B-Instruct/blob/main/config.json}
+\item \small\url{https://huggingface.co/eaddario/OLMo-2-1124-7B-Instruct-GGUF}
+\end{enumerate}
+
+% ........................................................
+\subsubsection{\texttt{ibm-granite/granite-3.3-8b-instruct}}
+
+\noindent\textit{Note: the instruct model shares the network geometry of its base
+model \texttt{granite-3.3-8b-base}; parameters below are extracted from base
+model documentation\src{1}.}
+
+\paragraph{1.~Layers and width.}
+40 hidden layers; hidden size 4,096\src{1}.
+
+\paragraph{2.~Attention heads.}
+32 query heads, 8 KV heads (GQA, group size 4)\src{1}.
+
+\paragraph{3.~Component sizes.}
+Dense decoder; no MoE\src{1}.
+MLP intermediate size: 12,800 ($\approx3.1\times$ hidden)\src{1}.
+Attention head dimension: 128\src{1}.
+Shared input/output embeddings (tied)\src{1};
+exact vocabulary size is not reported in the sources.
+
+\paragraph{4.~Position encoding.}
+RoPE; maximum context 128,000 tokens\src{1,2,3}.
+Base $\theta$ and any scaling factors are not stated in the sources.
+
+\paragraph{5.~Activations.}
+SwiGLU, uniformly across all layers\src{1}.
+
+\paragraph{6.~Normalization.}
+RMSNorm\src{1}.
+Exact placement and $\varepsilon$ not stated in the sources.
+
+\paragraph{7.~Other properties.}
+8.1B total parameters, all active at inference\src{1}.
+Pretrained on 12T tokens\src{1}.
+Natively supports \texttt{<think>}/\texttt{<response>} tags for structured
+reasoning\src{2} and Fill-in-the-Middle (FIM) code completion\src{1}.
+12 supported languages\src{2}.
+
+\noindent\textbf{Sources:}
+\begin{enumerate}[noitemsep,label=\small{[\arabic*]},leftmargin=*,topsep=2pt]
+\item \small\url{https://huggingface.co/ibm-granite/granite-3.3-8b-base}
+\item \small\url{https://build.nvidia.com/ibm/granite-3-3-8b-instruct}
+\item \small\url{https://navigator.ufl.edu/}
+\end{enumerate}
+
+% ........................................................
+\subsubsection{\texttt{deepseek-ai/DeepSeek-V3}}
+
+\paragraph{1.~Layers and width.}
+61 Transformer layers\src{2,3} (first 3 are dense FFN; the remaining 58 are
+MoE)\src{3}.
+Hidden dimension: 7,168\src{1,3}.
+
+\paragraph{2.~Attention heads.}
+128 query heads\src{3}.
+The model uses Multi-Head Latent Attention (MLA) instead of standard MHA/GQA:
+keys and values are compressed into a shared 512-dimensional latent vector
+($d_c=512$), then decompressed per-head, dramatically reducing KV cache
+memory\src{3,5}.
+Query compression latent: $d_c'=1{,}536$\src{3}.
+Attention head dimension: $d_h=128$\src{3}.
+
+\paragraph{3.~Component sizes.}
+Sparse MoE decoder.
+Per MoE layer: 257 total experts - 1 shared expert (always active) plus 256
+routed experts\src{2,3}.
+Per token: 9 experts activated (1 shared + 8 routed)\src{2,3}.
+Per-expert intermediate dimension: 2,048; combined active dimension:
+$9\times2048=18{,}432$\src{1,3}.
+Decoupled RoPE dimension per head: $d_h^R=64$\src{3}.
+Shared input and output embedding matrices\src{3}.
+Vocabulary size: 128,000\src{3} (Source~1 lists 129,280 - see
+Section~\ref{sec:uncertainty}).
+
+\paragraph{4.~Position encoding.}
+Decoupled RoPE embedded within MLA: positional information is concatenated
+to the KV representations rather than applied directly, resolving a mathematical
+incompatibility with MLA compression\src{3,5}.
+Maximum context: 131,072 tokens (128k)\src{3,4}.
+Context extended from an initial 4k via YaRN: $s=40$, $\alpha=1$, $\beta=32$,
+scaling factor $t=0.1\ln s+1$\src{3}.
+
+\paragraph{5.~Activations.}
+SwiGLU/SiLU, used consistently across all MoE and dense layers\src{1,2}.
+
+\paragraph{6.~Normalization.}
+RMSNorm, pre-norm placement\src{1,2,3}.
+Additionally, extra RMSNorm layers are inserted \emph{after} the compressed MLA
+latent vectors - a consequence of the MLA architecture\src{3}.
+
+\paragraph{7.~Other properties.}
+671B total parameters; 37B active per token (4.8\%)\src{2,3,4,6}.
+Auxiliary-loss-free load balancing: a dynamic routing bias prevents collapse
+without penalising the main loss\src{3,6}.
+Multi-Token Prediction (MTP) training objective: predicts 2 tokens per step
+(depth $D=1$)\src{3,5}.
+First large-scale model pre-trained natively in FP8 mixed precision;
+full training cost $\approx$\$5.58M on H800 GPUs\src{2,3,6}.
+
+\noindent\textbf{Sources:}
+\begin{enumerate}[noitemsep,label=\small{[\arabic*]},leftmargin=*,topsep=2pt]
+\item \small\url{https://www.atlascloud.ai/blog/guides/analyzing-deepseek-v3-model-performance}
+\item \small\url{https://fireworks.ai/blog/deepseek-model-architecture}
+\item \small\url{https://arxiv.org/abs/2412.19437}
+\item \small\url{https://github.com/deepseek-ai/DeepSeek-V3}
+\item \small\url{https://mccormickml.com/2025/02/12/the-inner-workings-of-deep-seek-v3/}
+\item \small\url{https://www.grandlinux.com/en/blogs/deepseek-moe-architecture.html}
+\end{enumerate}
+
+% ........................................................
+\subsubsection{\texttt{HuggingFaceTB/SmolLM2-1.7B-Instruct}}
+
+\paragraph{1.~Layers and width.}
+24 hidden layers; hidden size 2,048\src{1}.
+
+\paragraph{2.~Attention heads.}
+32 query heads and 32 KV heads - full MHA, no KV reduction\src{1}.
+
+\paragraph{3.~Component sizes.}
+Dense decoder (\texttt{LlamaForCausalLM} architecture); no MoE\src{1}.
+MLP intermediate size: 8,192 ($4\times$ hidden)\src{1}.
+Head dimension inferred as 64 ($2048/32$).
+Vocabulary size: 49,152\src{1,2}.
+Tied word embeddings (\texttt{tie\_word\_embeddings: true})\src{1,2}.
+
+\paragraph{4.~Position encoding.}
+RoPE, $\theta=130{,}000$; \texttt{rope\_scaling} is \texttt{null} (no additional
+scaling)\src{1}.
+Maximum context: 8,192 tokens per \texttt{config.json}\src{1};
+a secondary source lists 2,048 tokens\src{2} - see Section~\ref{sec:uncertainty}.
+
+\paragraph{5.~Activations.}
+SiLU (\texttt{hidden\_act: silu}), uniformly\src{1}.
+
+\paragraph{6.~Normalization.}
+RMSNorm, $\varepsilon=10^{-5}$\src{1}.
+Exact placement not stated in the sources.
+
+\paragraph{7.~Other properties.}
+1.7B parameters\src{2,3}; designed for edge, mobile, and browser deployment.
+Pretrained on 11T tokens (FineWeb-Edu, DCLM, The Stack, Cosmopedia v2, math
+and coding datasets)\src{2,3}.
+Post-trained via SFT + DPO on UltraFeedback\src{3}.
+Training used 256 NVIDIA H100 GPUs in bfloat16\src{2,3}.
+
+\noindent\textbf{Sources:}
+\begin{enumerate}[noitemsep,label=\small{[\arabic*]},leftmargin=*,topsep=2pt]
+\item \small\url{https://huggingface.co/HuggingFaceTB/SmolLM2-1.7B-Instruct/blob/main/config.json}
+\item \small\url{https://collabnix.com/hugging-face-small-language-model-a-complete-guide/}
+\item \small\url{https://mirai.us/models/SmolLM2-1.7B-Instruct}
+\end{enumerate}
+
+% ........................................................
+\subsubsection{\texttt{microsoft/Phi-4-mini-instruct}}
+
+\paragraph{1.~Layers and width.}
+32 hidden layers; hidden size 3,072\src{2}.
+
+\paragraph{2.~Attention heads.}
+24 query heads, 8 KV heads (GQA, group size 3)\src{2,3,4}.
+
+\paragraph{3.~Component sizes.}
+Dense decoder; no MoE\src{1,3,4}.
+MLP intermediate size: 8,192 ($\approx2.7\times$ hidden)\src{2}.
+Head dimension inferred as 128 ($3072/24$).
+Vocabulary size: 200,064\src{2,3,4}.
+Tied word embeddings (\texttt{tie\_word\_embeddings: true})\src{1,2,3,4}.
+No attention or MLP biases anywhere\src{2}.
+
+\paragraph{4.~Position encoding.}
+LongRoPE (\texttt{type: longrope})\src{2}.
+Base $\theta=10{,}000$; original max positions: 4,096\src{2}.
+Extended to 131,072 tokens\src{1,3,4} via a \texttt{rope\_scaling} dictionary
+containing a \texttt{short\_factor} array (all 1.0) and a \texttt{long\_factor}
+array with 48 dynamically scaled multipliers (ranging from 1.0 to 47.77)\src{2}.
+Partial rotary factor: 0.75 - RoPE is applied to only 75\% of each head's
+dimensions\src{2}.
+
+\paragraph{5.~Activations.}
+SiLU (\texttt{hidden\_act: silu}), uniformly\src{2}.
+
+\paragraph{6.~Normalization.}
+RMSNorm, $\varepsilon=10^{-5}$\src{2}.
+Exact placement not stated in the sources.
+
+\paragraph{7.~Other properties.}
+3.8B parameters\src{1,3,4}.
+Trained on 5T tokens (high-quality educational data, code, synthetic data,
+filtered web text); knowledge cutoff June~2024\src{3,4}.
+Post-trained via SFT + DPO + RLHF\src{1,3,4}.
+
+\noindent\textbf{Sources:}
+\begin{enumerate}[noitemsep,label=\small{[\arabic*]},leftmargin=*,topsep=2pt]
+\item \small\url{https://catalog.models.ai.microsoft.com/}
+\item \small\url{https://huggingface.co/microsoft/Phi-4-mini-instruct/blob/main/config.json}
+\item \small\url{https://build.nvidia.com/microsoft/phi-4-mini-instruct}
+\item \small\url{https://huggingface.co/microsoft/Phi-4-mini-instruct}
+\end{enumerate}
+
+% ........................................................
+\subsubsection{\texttt{tiiuae/Falcon3-7B-Instruct}}
+
+\paragraph{1.~Layers and width.}
+28 hidden layers\src{1,2}; hidden size 3,072\src{1}.
+
+\paragraph{2.~Attention heads.}
+12 query heads, 4 KV heads (GQA, group size 3)\src{1,2}.
+Attention head dimension: \textbf{256}\src{1,2} - double the 128 used by all
+other models in this set.
+
+\paragraph{3.~Component sizes.}
+Dense decoder (\texttt{LlamaForCausalLM}); no MoE\src{1,2}.
+MLP intermediate size: 23,040 ($\approx7.5\times$ hidden - largest ratio in this
+set)\src{1}.
+Vocabulary size: 131,072; untied embeddings
+(\texttt{tie\_word\_embeddings: false})\src{1}.
+No attention or MLP biases\src{1}.
+
+\paragraph{4.~Position encoding.}
+RoPE, $\theta=1{,}000{,}042$\src{1,2}; \texttt{rope\_scaling}~=~\texttt{null}\src{1}.
+Maximum context: 32,768 tokens\src{1} (Source~2 summarises as ``32k'').
+
+\paragraph{5.~Activations.}
+SwiGLU (\texttt{hidden\_act: silu}), uniformly\src{1,2}.
+
+\paragraph{6.~Normalization.}
+RMSNorm, $\varepsilon=10^{-6}$\src{1,2}.
+Exact placement not stated in the sources.
+
+\paragraph{7.~Other properties.}
+Despite the ``Falcon'' brand, the code architecture class is
+\texttt{LlamaForCausalLM}\src{1}.
+Pretrained on 14 teratokens; post-trained on 1.2M samples covering conversation,
+code, STEM, safety, and function calling\src{2}.
+Falcon-LLM-License (not Apache~2.0)\src{1,2}.
+
+\noindent\textbf{Sources:}
+\begin{enumerate}[noitemsep,label=\small{[\arabic*]},leftmargin=*,topsep=2pt]
+\item \small\url{https://huggingface.co/tiiuae/Falcon3-7B-Instruct/blob/main/config.json}
+\item \small\url{https://build.nvidia.com/tiiuae/falcon3-7b-instruct}
+\end{enumerate}
+
+% ........................................................
+\subsubsection{\texttt{dicta-il/dictalm2.0-instruct}}
+
+\paragraph{1.~Layers and width.}
+32 hidden layers; hidden size 4,096\src{2}.
+
+\paragraph{2.~Attention heads.}
+32 query heads, 8 KV heads (GQA, group size 4)\src{2}.
+
+\paragraph{3.~Component sizes.}
+Dense decoder based on Mistral-7B-v0.1; no MoE\src{2,3}.
+MLP intermediate size: 14,336 ($\approx3.5\times$ hidden)\src{2}.
+Attention head dimension (RoPE dimension count): 128\src{2}.
+Vocabulary size: 33,152\src{2}.
+Separate (untied) input embedding and output matrices, each of size
+$4096\times33{,}152$\src{2}.
+
+\paragraph{4.~Position encoding.}
+RoPE; base frequency ($\theta$): 10,000; applied over 128 dimensions\src{2}.
+Maximum context: 32,768 tokens\src{1,2}.
+
+\paragraph{5.~Activations.}
+Activation function not explicitly named in the sources.
+Inferred as SiLU/SwiGLU from the presence of \texttt{ffn\_gate},
+\texttt{ffn\_up}, and \texttt{ffn\_down} weight matrices\src{2}, consistent with
+the Mistral-7B-v0.1 base architecture\src{3}.
+
+\paragraph{6.~Normalization.}
+RMSNorm, $\varepsilon=10^{-5}$\src{2}.
+Pre-norm placement is confirmed by the presence of \texttt{attn\_norm},
+\texttt{ffn\_norm}, and \texttt{output\_norm} weight tensors in the model
+blobs\src{2}.
+
+\paragraph{7.~Other properties.}
+The only Hebrew-specialised model in this set.
+Built on Mistral-7B-v0.1, then continually pre-trained on 190B tokens
+(50\% Hebrew, 50\% English)\src{3}.
+Hebrew tokenisation rate improved from $\approx$5.78 to \textbf{2.76
+tokens/word} through the injection of $\approx$1,000 Hebrew-specific tokens into
+the vocabulary\src{3}.
+
+\noindent\textbf{Sources:}
+\begin{enumerate}[noitemsep,label=\small{[\arabic*]},leftmargin=*,topsep=2pt]
+\item \small\url{https://ollama.com/aminadaven/dictalm2.0-instruct}
+\item \small\url{https://ollama.com/aminadaven/dictalm2.0-instruct:q4_0}
+\item \small\url{https://huggingface.co/dicta-il/dictalm2.0}
+\end{enumerate}
+
+% ----------------------------------------------------------
+\subsection{Uncertainties, Missing Fields, and Source Disagreements}
+\label{sec:uncertainty}
+% ----------------------------------------------------------
+
+\begin{description}[leftmargin=2.2cm,labelwidth=2cm,style=sameline]
+
+\item[\textbf{Llama}]
+  Sources\src{1} describe the hidden size as ``typically 4096--5120'' without
+  pinning the 8B model to a specific value; 4096 is used as the well-known
+  value for this variant.
+  KV head count is absent from all three sources; 8 is the accepted value.
+  Norm type is listed as ``RMSNorm \emph{or} LayerNorm''\src{1} without
+  resolution.
+  Source~1 states the tokenizer supports 8,192 tokens, while Source~2 lists the
+  context length as 128k; the latter is treated as authoritative for the
+  \texttt{max\_position\_embeddings} configuration.
+
+\item[\textbf{DeepSeek-V3}]
+  Vocabulary size: the arXiv technical report\src{3} states 128,000, while an
+  Atlas Cloud analysis\src{1} lists 129,280.
+  Source~3 is treated as authoritative.
+  The MLP ``size'' of 2,048 refers to each individual expert's intermediate
+  dimension; the effective combined dimension across all 9 active experts is
+  18,432, which is the figure Source~1 reports as the MLP dimension.
+
+\item[\textbf{Granite}]
+  Vocabulary size is not reported in any of the three sources consulted.
+  RoPE $\theta$ value and any scaling parameters are also absent; these fields
+  are left as NA.
+
+\item[\textbf{SmolLM2}]
+  Source~2 states the context length as 2,048 tokens, while
+  \texttt{config.json}\src{1} sets \texttt{max\_position\_embeddings} to 8,192.
+  The configuration file is treated as authoritative; the discrepancy likely
+  reflects documentation lag or a deployment-level truncation.
+
+\end{description}
+
+% ----------------------------------------------------------
+\subsection{Architectural Comparison}
+% ----------------------------------------------------------
+
+\begin{longtable}{@{}L{3.0cm}rrrrrrl@{}}
+\caption{Architectural parameters - all 10 models}\label{tab:comparison}\\
+\toprule
+\textbf{Model} & \textbf{Lay.} & \textbf{Hidden} & \textbf{Q-h} & \textbf{KV-h} & \textbf{MLP} & \textbf{Ctx\,(k)} & \textbf{Vocab} \\
+\midrule
+\endfirsthead
+\multicolumn{8}{l}{\small\textit{(continued)}}\\
+\toprule
+\textbf{Model} & \textbf{Lay.} & \textbf{Hidden} & \textbf{Q-h} & \textbf{KV-h} & \textbf{MLP} & \textbf{Ctx\,(k)} & \textbf{Vocab} \\
+\midrule
+\endhead
+\bottomrule
+\endfoot
+Llama-3.1-8B    & 32 & 4096 & 32 & 8  & 14336 & 128 & 128k \\
+Mistral-7B v0.3 & 32 & 4096 & 32 & 8  & 14336 & 32  & 33k  \\
+Qwen2.5-7B      & 28 & 3584 & 28 & 4  & 18944 & 128 & 152k \\
+OLMo-2-7B       & 32 & 4096 & 32 & 32 & 11008 & 4   & 100k \\
+Granite-3.3-8B  & 40 & 4096 & 32 & 8  & 12800 & 128 & NA   \\
+DeepSeek-V3     & 61 & 7168 & 128 & MLA & 2048 (per~exp.) & 128 & 128k \\
+SmolLM2-1.7B    & 24 & 2048 & 32 & 32 & 8192  & 8   & 49k  \\
+Phi-4-mini      & 32 & 3072 & 24 & 8  & 8192  & 128 & 200k \\
+Falcon3-7B      & 28 & 3072 & 12 & 4  & 23040 & 32  & 131k \\
+DictaLM2.0      & 32 & 4096 & 32 & 8  & 14336 & 32  & 33k  \\
+\end{longtable}
+
+\begin{table}[H]
+\centering\small
+\caption{Activation, norm, and position-encoding scheme per model}
+\label{tab:comparison2}
+\begin{tabular}{@{}L{3.0cm}L{1.8cm}L{1.8cm}L{7cm}@{}}
+\toprule
+\textbf{Model} & \textbf{Act.} & \textbf{Norm} & \textbf{Position encoding} \\
+\midrule
+Llama-3.1-8B    & SwiGLU & RMSNorm & RoPE, llama3 multi-scale scaling \\
+Mistral-7B v0.3 & SiLU   & RMSNorm & RoPE, $\theta$=1M; SWA disabled \\
+Qwen2.5-7B      & SiLU   & RMSNorm & RoPE + YaRN (factor 4.0) \\
+OLMo-2-7B       & SiLU   & RMSNorm & RoPE, $\theta$=500k, no scaling \\
+Granite-3.3-8B  & SwiGLU & RMSNorm & RoPE, 128k ctx (params unknown) \\
+DeepSeek-V3     & SwiGLU & RMSNorm & Decoupled RoPE + YaRN in MLA \\
+SmolLM2-1.7B    & SiLU   & RMSNorm & RoPE, $\theta$=130k, no scaling \\
+Phi-4-mini      & SiLU   & RMSNorm & LongRoPE, partial rotation (0.75) \\
+Falcon3-7B      & SwiGLU & RMSNorm & RoPE, $\theta$=1M, head\_dim=256 \\
+DictaLM2.0      & SiLU   & RMSNorm & RoPE, $\theta$=10k (lowest in set) \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\paragraph{Attention mechanism.}
+Seven of ten models use GQA (predominantly 8 KV heads for a 4:1 ratio against 32
+Q heads).
+Two models - OLMo-2 and SmolLM2 - retain full MHA (32 KV heads = 32 Q heads),
+which is viable at their scale where KV cache pressure is lower.
+DeepSeek-V3 uses MLA, eliminating traditional KV heads by compressing into a
+512-dim latent.
+
+\paragraph{MLP width.}
+The intermediate-to-hidden ratio spans from $2.7\times$ (OLMo-2, Phi-4-mini)
+to $7.5\times$ (Falcon3).
+The majority cluster at $3.5\times$ (Llama, Mistral, DictaLM).
+Qwen ($5.3\times$) and Falcon ($7.5\times$) are wide outliers;
+Falcon compensates for a narrow hidden size and few Q heads by widening the FFN.
+
+\paragraph{Context length strategies.}
+All models use RoPE but differ in how they extend it: a high base $\theta$ alone
+(Mistral: 1M, Falcon: $\approx$1M), YaRN on top of a high $\theta$ (Qwen, DeepSeek),
+llama3 multi-scale frequency stretching (Llama), and LongRoPE interpolation (Phi).
+DictaLM's $\theta$=10,000 is the pre-scaling-era default, making it the weakest
+at long-context generalisation.
+
+\paragraph{Vocabulary size.}
+Ranges from 33k (Mistral, DictaLM) to 200k (Phi-4-mini).
+Larger vocabularies reduce tokenisation overhead for code and non-English text
+at the cost of larger embedding matrices.
+
+% ----------------------------------------------------------
+\subsection{Reflection and Analysis}
+% ----------------------------------------------------------
+
+\paragraph{Consensus choices.}
+RMSNorm with pre-norm, RoPE positional encoding, and a gated linear unit
+activation (SiLU or SwiGLU) are universal
+across all ten models.
+GQA is near-universal for the 7--8B class (7 of 8 applicable models).
+
+\paragraph{Outliers and rules of thumb.}
+\begin{itemize}[noitemsep]
+  \item \textbf{Falcon3:} FFN ratio $7.5\times$; head dimension 256 (vs.\ 128
+        everywhere else); fewest Q heads (12). A ``wide-head'' design that
+        compensates narrowness in other dimensions with an unusually large FFN.
+  \item \textbf{OLMo-2:} full MHA, $2.7\times$ FFN, 4k context. Prioritises
+        transparency and reproducibility over deployment efficiency.
+  \item \textbf{Qwen2.5:} $5.3\times$ FFN, QKV bias, 152k vocab. Heavy
+        investment in multilingual and reasoning performance.
+  \item \textbf{DeepSeek-V3:} qualitatively different class - MoE with 671B
+        total / 37B active, MLA attention, FP8 training.
+  \item \textbf{DictaLM2.0:} $\theta$=10,000 is the pre-high-$\theta$ Mistral
+        default, leaving it the least robust for long-sequence inputs.
+  \item The most common Q/KV ratio among GQA models is 4:1 (32Q/8KV at
+        hidden=4096). Qwen uses 7:1; Falcon and Phi use 3:1.
+  \item Deeper stack (40 layers) for Granite; MoE depth (61 layers) for
+        DeepSeek, where active parameter count per forward pass remains
+        tractable.
+\end{itemize}
+
+\paragraph{Recommended design for a new 7--8B model.}
+Based on the consensus above: 32 layers, hidden size 4,096, GQA with 32Q/8KV
+heads and head dimension 128.
+SwiGLU MLP with intermediate size $\approx14\text{k}$--$16\text{k}$
+($3.5$--$4\times$ hidden).
+RoPE with $\theta\approx500\text{k}$--$1\text{M}$; YaRN can be applied at
+inference time if contexts $>32\text{k}$ are needed, avoiding baking in complex
+scaling during pretraining.
+RMSNorm pre-norm, $\varepsilon=10^{-5}$.
+Vocab $\approx100\text{k}$--$130\text{k}$ for broad multilingual coverage;
+tied embeddings only if the model is small or memory-constrained.
+Avoid MoE and MLA unless the deployment scenario explicitly requires them.
+
+% ============================================================
+\newpage
+\section{Part 2 - Tokenizers}
+% ============================================================
+
+% ----------------------------------------------------------
+\subsection{Tokenizer Choices per Model}
+% ----------------------------------------------------------
+
+Table~\ref{tab:tokenizers} summarises the three tokenizer properties examined
+for each model: vocabulary size, word-boundary strategy, and non-word tokens.
+
+\begin{table}[H]
+\centering
+\caption{Tokenizer summary for all 10 models}
+\label{tab:tokenizers}
+\small
+\begin{tabular}{L{3.4cm} L{3.6cm} R{1.3cm} L{2.4cm} C{1.1cm} R{1.1cm}}
+\toprule
+\textbf{Model} & \textbf{Class} & \textbf{Vocab} & \textbf{Boundary} & \textbf{Byte} & \textbf{Special} \\
+\midrule
+Llama-3.1-8B    & \texttt{PreTrainedTokenizerFast} & 128{,}256 & \texttt{Ġ} (BPE)          & No  &  2 \\
+Mistral-7B      & \texttt{LlamaTokenizerFast}      &  32{,}768 & \texttt{\spmark} (SentencePiece)& Yes &  3 \\
+Qwen2.5-7B      & \texttt{Qwen2TokenizerFast}      & 151{,}665 & \texttt{Ġ} (BPE)          & No  & 14 \\
+OLMo-2-7B       & \texttt{GPT2TokenizerFast}       & 100{,}278 & \texttt{Ġ} (BPE)          & No  &  2 \\
+Granite-3.3-8B  & \texttt{GPT2TokenizerFast}       &  49{,}159 & \texttt{Ġ} (BPE)          & No  &  8 \\
+DeepSeek-V3     & \texttt{LlamaTokenizerFast}      & 128{,}815 & \texttt{Ġ} (BPE)          & No  &  2 \\
+SmolLM2-1.7B    & \texttt{GPT2TokenizerFast}       &  49{,}152 & \texttt{Ġ} (BPE)          & No  &  3 \\
+Phi-4-mini      & \texttt{GPT2TokenizerFast}       & 200{,}029 & \texttt{Ġ} (BPE)          & No  &  1 \\
+Falcon3-7B      & \texttt{PreTrainedTokenizerFast} & 131{,}072 & \texttt{Ġ} (BPE)          & No  & 25 \\
+DictaLM-2.0     & \texttt{LlamaTokenizerFast}      &  33{,}152 & \texttt{\spmark} (SentencePiece)& Yes &  3 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\paragraph{Vocabulary size.}
+Vocabulary sizes span nearly an order of magnitude, from 32,768 tokens
+(Mistral-7B, DictaLM-2.0) to 200,029 (Phi-4-mini), reflecting different
+trade-offs between coverage, embedding-table size, and average sequence length.
+
+\paragraph{Word-boundary strategy.}
+All ten tokenizers use a \emph{prefix-marker} convention to encode which tokens
+are the beginning of a new word, so that the original text can be reconstructed
+unambiguously from the token sequence alone.  Eight models use
+\textbf{GPT-2-style BPE}: a leading \texttt{Ġ} (U+0120) signals that the token
+opens a new word; tokens without this prefix are continuations that attach
+directly to the preceding token.  The two exceptions---\textbf{Mistral-7B} and
+\textbf{DictaLM-2.0}---use \textbf{SentencePiece}, which applies the same
+logic with \texttt{\spmark} (U+2581) instead.  Reconstruction is thus
+straightforward in both cases: tokens are concatenated left-to-right; each
+occurrence of the boundary marker (stripped from the token string and replaced
+by a space) starts a new word.
+
+\paragraph{Special tokens.}
+The ``Special'' column counts tokens that encode structural or control
+information rather than text content: sequence delimiters (\texttt{<s>},
+\texttt{</s>}, \texttt{<|endoftext|>}), unknown-token placeholders
+(\texttt{<unk>}), and chat-format markers.  Most models have 1--3 such tokens.
+Three models stand out:
+\begin{itemize}[noitemsep]
+  \item \textbf{Qwen2.5} (14): adds vision/tool-use delimiters
+        (\texttt{<|im\_start|>}, \texttt{<|im\_end|>},
+        \texttt{<|object\_ref\_start|>}, \texttt{<|box\_start|>},~\ldots).
+  \item \textbf{Granite-3.3} (8): adds role-marking tokens
+        (\texttt{<|start\_of\_role|>}, \texttt{<|end\_of\_role|>},
+        \texttt{<|tool\_call|>}, \texttt{<|start\_of\_cite|>},~\ldots).
+  \item \textbf{Falcon3} (25): inherits legacy corpus-metadata markers from
+        pre-training (\texttt{>>TITLE<<}, \texttt{>>ABSTRACT<<},~\ldots).
+\end{itemize}
+
+\paragraph{Byte-fallback tokens.}
+Only the two SentencePiece tokenizers (Mistral, DictaLM) carry an additional
+256 \texttt{<0xNN>} byte tokens, one per possible byte value.  These are also
+non-word tokens: they do not represent text directly but serve as a universal
+fallback, encoding any Unicode codepoint byte-by-byte whenever it lacks a
+dedicated vocabulary entry.  This guarantees that the tokenizer is losslessly
+invertible on arbitrary input.
+
+% ----------------------------------------------------------
+\subsection{Average Tokens per Word}
+% ----------------------------------------------------------
+
+\paragraph{Methodology.}
+Two reference corpora were used: a $\sim$1{,}000-word English text and a
+$\sim$1{,}000-word Hebrew text (both stored in \texttt{docs/}).
+For each model, the corpus was encoded with
+\texttt{tok.encode(text, add\_special\_tokens=False)}; the \emph{word count}
+was defined as the number of whitespace-delimited tokens
+(\texttt{len(text.split())}).  Average tokens per word is therefore
+$\frac{\text{encoded token count}}{\text{whitespace word count}}$.
+
+This method assumes that whitespace splitting is a reasonable word-count proxy
+for both English and Hebrew.  Hebrew words are whitespace-delimited (unlike,
+e.g., Chinese), so the same formula applies directly.  The ratio does not
+account for punctuation attached to words, but this bias is uniform across
+models and therefore does not affect \emph{comparisons}.
+
+\begin{table}[H]
+\centering
+\caption{Average tokens per word on English and Hebrew corpora}
+\label{tab:avgtokens}
+\small
+\begin{tabular}{L{3.4cm} R{2.2cm} R{2.2cm} R{2.0cm}}
+\toprule
+\textbf{Model} & \textbf{EN avg} & \textbf{HE avg} & \textbf{HE/EN ratio} \\
+\midrule
+Llama-3.1-8B    & 1.29 & 5.77 & 4.47 \\
+Mistral-7B      & 1.49 & 5.97 & 4.01 \\
+Qwen2.5-7B      & 1.33 & 2.58 & 1.94 \\
+OLMo-2-7B       & 1.30 & 5.78 & 4.45 \\
+Granite-3.3-8B  & 1.76 & 5.28 & 3.00 \\
+DeepSeek-V3     & 1.28 & 2.86 & 2.23 \\
+SmolLM2-1.7B    & 1.33 & 6.39 & 4.80 \\
+Phi-4-mini      & 1.29 & 2.42 & 1.88 \\
+Falcon3-7B      & 1.30 & 5.31 & 4.08 \\
+DictaLM-2.0     & 1.49 & 2.84 & 1.91 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+% ----------------------------------------------------------
+\subsection{Tokenization Differences Example}
+% ----------------------------------------------------------
+
+\paragraph{Text used.}
+The following 59-word English passage was used
+(file \texttt{docs/english\_text\_part2.txt}):
+
+\begin{quote}
+\small
+The World Chess Championship 2026 is an upcoming chess match to determine the
+World Chess Champion.  It will be played between the defending champion Gukesh
+Dommaraju and the challenger, Javokhir Sindarov, the winner of the Candidates
+Tournament 2026.  The Championship is provisionally scheduled between 23
+November and 17 December 2026, while the host city is yet to be decided.
+\end{quote}
+
+The span \textbf{\texttt{"Gukesh Dommaraju"}} (rare South-Indian proper name)
+was chosen because it produces the greatest variation across tokenizers.
+Table~\ref{tab:gukesh} shows the tokenization by all ten models; four distinct
+segmentations are produced.
+
+\begin{table}[H]
+\centering
+\caption{Tokenization of \texttt{"Gukesh Dommaraju"} across all 10 models}
+\label{tab:gukesh}
+\small
+\begin{tabular}{L{3.4cm} L{9cm}}
+\toprule
+\textbf{Model(s)} & \textbf{Tokens} \\
+\midrule
+Llama, Qwen, OLMo, DeepSeek, Phi, Falcon
+  & \texttt{[`G', `uk', `esh', `ĠDom', `mar', `aju']} \\
+Mistral, DictaLM
+  & \texttt{[`\spmark{}Gu', `k', `esh', `\spmark{}Dom', `mar', `aju']} \\
+Granite
+  & \texttt{[`G', `uk', `esh', `ĠDom', `mar', `aj', `u']} \\
+SmolLM2
+  & \texttt{[`G', `uk', `esh', `ĠD', `omm', `ar', `aj', `u']} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Six of the ten models agree on a single 6-token segmentation.  The two
+SentencePiece models (Mistral and DictaLM) produce the same alternative
+6-token split, differing only in the boundary prefix character (\texttt{\spmark}
+vs.\ \texttt{Ġ}), which reflects their different tokenizer type rather than
+their training vocabulary.  Granite and SmolLM2 each produce unique
+segmentations with 7 and 8 tokens respectively, indicating that the substring
+\texttt{"Dommaraju"} was not frequent enough in their (smaller) training
+corpora to be represented as a single merged token.
+
+For the common phrase \textbf{\texttt{"The World Chess Championship"}}, the
+majority (6 models: Llama, Qwen, OLMo, DeepSeek, Phi, Falcon) tokenize it into
+4 tokens: \texttt{[`The', `ĠWorld', `ĠChess', `ĠChampionship']}.  The two
+SentencePiece models split \texttt{"Chess"} as \texttt{[`\spmark{}Che', `ss']} (5
+tokens), Granite fragmentizes \texttt{"Championship"} further into four pieces
+(8 tokens total), and SmolLM2 splits \texttt{"Championship"} as
+\texttt{[`ĠChampions', `hip']} (5 tokens).
+
+\paragraph{Likely cause.}
+The variation on proper names stems primarily from \emph{vocabulary size and
+training corpus composition}.  Rare names that were seen infrequently receive
+fewer merged subword units, causing them to be split into smaller fragments.
+The boundary-marker divergence (\texttt{Ġ} vs.\ \texttt{\spmark}) is a consequence
+of the underlying tokenizer algorithm (BPE vs.\ SentencePiece) and has no
+effect on reconstruction fidelity.
+
+% ----------------------------------------------------------
+\subsection{Discussion}
+% ----------------------------------------------------------
+
+\paragraph{English efficiency.}
+All models are similarly efficient for English, producing roughly 1.28--1.49
+tokens per whitespace word.  The outlier is \textbf{Granite-3.3} (1.76), which
+has the smallest base vocabulary (49{,}159 before special tokens) among
+the BPE models and therefore covers fewer long English morphemes.
+
+\paragraph{Hebrew efficiency.}
+The results split the ten models into two clear groups:
+
+\begin{itemize}[noitemsep]
+  \item \textbf{Hebrew-aware} (HE/EN $\leq 3$): Qwen2.5, DeepSeek-V3, Phi-4-mini,
+        DictaLM-2.0. These tokenizers have seen substantial Hebrew during
+        training and have accumulated many whole-Hebrew-word tokens.
+        Phi-4-mini achieves the best ratio (1.88$\times$) with 200{,}029
+        vocabulary entries; DictaLM-2.0 benefits from being trained
+        specifically on Hebrew/Israeli text.
+  \item \textbf{Hebrew-inefficient} (HE/EN $> 4$): Llama, Mistral, OLMo,
+        SmolLM2, Falcon, and Granite.  Hebrew words are fragmented into
+        individual characters or very short byte sequences, producing 5--6
+        tokens per word.  SmolLM2 is the worst at 6.39 tokens per Hebrew word
+        ($4.80\times$ the English rate).
+\end{itemize}
+
+\paragraph{Implications for deployment.}
+A high HE/EN ratio is costly: it inflates context length for Hebrew inputs,
+reduces effective context window, and increases inference latency and cost.
+For a Hebrew-facing application one should prefer Qwen2.5, Phi-4-mini,
+DeepSeek-V3, or DictaLM-2.0.  For purely English tasks the difference is
+negligible (all models within 0.5 tokens/word of each other).
+
+% ============================================================
+\newpage
+\section{Part 3 - Constrained Decoding}
+% ============================================================
+
+% ----------------------------------------------------------
+\subsection{Hebrew Token Identification}
+% ----------------------------------------------------------
+
+\textit{[TODO: For \texttt{Qwen2.5-7B-Instruct} and
+\texttt{Mistral-7B-Instruct-v0.3}: identify all tokens that may participate
+in Hebrew text (Hebrew characters, numbers, punctuation). Describe the
+identification strategy. Refer to the submitted JSON files.]}
+
+% ----------------------------------------------------------
+\subsection{Implementation}
+% ----------------------------------------------------------
+
+\textit{[TODO: Brief description of how constrained decoding was implemented
+(logit masking / token-level beam filtering / etc.).]}
+
+% ----------------------------------------------------------
+\subsection{Results and Discussion}
+% ----------------------------------------------------------
+
+\textit{[TODO: 10 English queries with unconstrained and constrained outputs for
+both models. Discussion: Is the Hebrew text meaningful? Does it relate to the
+question? Do the models differ? Are certain languages favoured?]}
+
+% ============================================================
+\newpage
+\section{Part 4 - Fine Tuning}
+% ============================================================
+
+% ----------------------------------------------------------
+\subsection{Data}
+% ----------------------------------------------------------
+
+\textit{[TODO: Describe the training data (English prompt $\to$ Hebrew answer
+pairs): source, creation method, and confirmation that none of the 20 evaluation
+inputs appear in the training set.]}
+
+% ----------------------------------------------------------
+\subsection{Fine-Tuning Procedure}
+% ----------------------------------------------------------
+
+\textit{[TODO: Describe the fine-tuning setup: LoRA configuration (rank,
+$\alpha$, target modules), training hyper-parameters, and the chat-template
+usage for both training and inference.]}
+
+% ----------------------------------------------------------
+\subsection{Evaluation}
+% ----------------------------------------------------------
+
+\textit{[TODO: Run the original and fine-tuned \texttt{Qwen2.5-1.5B-Instruct}
+on all 20 evaluation inputs. Present outputs side by side. Discuss whether the
+fine-tuned model answers in Hebrew and whether the answers are relevant.]}
+
+\end{document}
