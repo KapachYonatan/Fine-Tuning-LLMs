@@ -1,6 +1,6 @@
 accelerate==1.13.0
 bitsandbytes>=0.41.0
-datasets>=2.20.0
+datasets==4.8.5
 google-genai>=1.0.0
 peft>=0.10.0
 torchao>=0.16.0
