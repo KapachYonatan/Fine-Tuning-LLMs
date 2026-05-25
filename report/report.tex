@@ -38,7 +38,7 @@
 
 \title{\textbf{Assignment 2}\\[6pt]
        \large Architectural Choices, Tokenizers, Decoding, and Fine Tuning}
-\author{}
+\author{Yehonatan Kapach (318515756)}
 \date{May 2026}
 
 
@@ -739,11 +739,7 @@ unambiguously from the token sequence alone.  Eight models use
 \textbf{GPT-2-style BPE}: a leading \texttt{Ġ} (U+0120) signals that the token
 opens a new word; tokens without this prefix are continuations that attach
 directly to the preceding token.  The two exceptions---\textbf{Mistral-7B} and
-\textbf{DictaLM-2.0}---use \textbf{SentencePiece}, which applies the same
-logic with \texttt{\spmark} (U+2581) instead.  Reconstruction is thus
-straightforward in both cases: tokens are concatenated left-to-right; each
-occurrence of the boundary marker (stripped from the token string and replaced
-by a space) starts a new word.
+\textbf{DictaLM-2.0}---use \textbf{SentencePiece}, which treats the marker  \spmark{(U+2581)} as a literal whitespace placeholder. Reconstruction is straightforward in both cases through left-to-right concatenation. However, while the GPT-2 BPE marker dictates logical word boundaries that must be swapped for spaces, SentencePiece treats its marker as an actual character, allowing for a direct substitution back into standard whitespaces. 
 
 \paragraph{Special tokens.}
 The ``Special'' column counts tokens that encode structural or control
@@ -1213,6 +1209,8 @@ Good / Partial / Poor relevance & 20 / 0 / 0 & 3 / 11 / 6 \\
 \bottomrule
 \end{tabular}
 \end{table}
+
+The relevance score was determined using the "LLM as a judge" methodology; the outputs were prompted to a strong LLM (Claude sonnet 4.6), which was required to give a score to each response (Good/Partial/Poor).
 
 \textbf{Training-loss evidence of learning.}
 The training loss started at \textbf{2.825} and decreased to
