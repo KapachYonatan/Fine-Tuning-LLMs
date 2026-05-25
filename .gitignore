@@ -38,7 +38,7 @@ code/part4/output*/
 lora_adapter/
 
 # Part 4 generated training data
-data/
+#data/
 
 # OS artifacts
 .DS_Store

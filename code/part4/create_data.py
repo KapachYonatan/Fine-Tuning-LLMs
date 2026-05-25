@@ -1,27 +1,30 @@
 """
 create_data.py — Part 4: Generate training data (English prompt → Hebrew answer)
 
-Strategy A: load Qwen/Qwen2.5-7B-Instruct with a system prompt that forces Hebrew
-answers, then feed it English instructions from tatsu-lab/alpaca.
+Calls the Gemini API to generate Hebrew answers for English instructions
+from tatsu-lab/alpaca.  Requires a Gemini API key in the environment:
+
+    export GEMINI_API_KEY="your-key-here"
 
 Usage:
     python code/part4/create_data.py              # generate 1000 examples
     python code/part4/create_data.py --n 10       # quick smoke test
     python code/part4/create_data.py --resume     # continue from a partial run
+    python code/part4/create_data.py --model gemini-3-flash-preview  # override model
 
 Output:
     data/train_data.jsonl   (one JSON object per line: {"prompt": ..., "response": ...})
 """
 
 import argparse
-import gc
 import json
 import os
+import time
 
-import torch
 from datasets import load_dataset
+from google import genai
+from google.genai import types
 from tqdm import tqdm
-from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
 
 # ── Paths ─────────────────────────────────────────────────────────────────────
 
@@ -30,9 +33,9 @@ ROOT = os.path.dirname(os.path.dirname(BASE))           # workspace root
 
 # ── Constants ─────────────────────────────────────────────────────────────────
 
-GENERATOR_MODEL  = "Qwen/Qwen2.5-7B-Instruct"
-SYSTEM_PROMPT    = "You are a helpful assistant. Always answer in Hebrew."
-MAX_NEW_TOKENS   = 256
+DEFAULT_MODEL = "gemini-3-flash-preview"
+SYSTEM_PROMPT = "You are a helpful assistant. Always answer in Hebrew."
+RATE_LIMIT_SLEEP = 1.0   # seconds between API calls (free tier: 60 RPM)
 
 # All 20 evaluation inputs — must NOT appear in training data.
 EVAL_INPUTS = {
@@ -75,7 +78,8 @@ def load_alpaca_prompts(n_needed: int, already_done: set) -> list:
     Returns up to n_needed prompts.
     """
     print("Downloading tatsu-lab/alpaca …")
-    ds = load_dataset("tatsu-lab/alpaca", split="train")
+    ds = load_dataset("tatsu-lab/alpaca", split="train",
+                      token=os.environ.get("HF_TOKEN"))
     prompts = []
     for row in ds:
         instruction = row["instruction"].strip()
@@ -93,28 +97,18 @@ def load_alpaca_prompts(n_needed: int, already_done: set) -> list:
     return prompts
 
 
-def generate_hebrew_answer(model, tokenizer, prompt: str) -> str:
-    messages = [
-        {"role": "system", "content": SYSTEM_PROMPT},
-        {"role": "user",   "content": prompt},
-    ]
-    formatted = tokenizer.apply_chat_template(
-        messages, tokenize=False, add_generation_prompt=True
-    )
-    inputs    = tokenizer(formatted, return_tensors="pt")
-    device    = next(model.parameters()).device
-    inputs    = {k: v.to(device) for k, v in inputs.items()}
-
-    with torch.no_grad():
-        output_ids = model.generate(
-            **inputs,
-            max_new_tokens=MAX_NEW_TOKENS,
-            do_sample=True,
+def generate_hebrew_answer(client: genai.Client, model_name: str, prompt: str) -> str:
+    response = client.models.generate_content(
+        model=model_name,
+        config=types.GenerateContentConfig(
+            system_instruction=SYSTEM_PROMPT,
+            max_output_tokens=512,
             temperature=0.7,
-            top_p=0.9,
-        )
-    new_ids = output_ids[0, inputs["input_ids"].shape[1]:]
-    return tokenizer.decode(new_ids, skip_special_tokens=True)
+            thinking_config=types.ThinkingConfig(thinking_budget=0),
+        ),
+        contents=prompt,
+    )
+    return response.text
 
 
 # ── Main ──────────────────────────────────────────────────────────────────────
@@ -127,7 +121,15 @@ def main():
                         help="Output JSONL file path")
     parser.add_argument("--resume", action="store_true",
                         help="Resume from an existing partial output file")
+    parser.add_argument("--model",  default=DEFAULT_MODEL,
+                        help=f"Gemini model name (default: {DEFAULT_MODEL})")
     args = parser.parse_args()
+
+    api_key = os.environ.get("GEMINI_API_KEY")
+    if not api_key:
+        raise EnvironmentError("GEMINI_API_KEY environment variable is not set.")
+    client = genai.Client(api_key=api_key)
+    print(f"Gemini model: {args.model}")
 
     os.makedirs(os.path.dirname(args.output), exist_ok=True)
 
@@ -152,48 +154,18 @@ def main():
     if len(prompts) < n_needed:
         print(f"  Warning: only found {len(prompts)} suitable prompts (requested {n_needed}).")
 
-    # ── Load generator model ──────────────────────────────────────────────────
-    print(f"\nLoading generator model: {GENERATOR_MODEL}")
-    device    = "cuda" if torch.cuda.is_available() else "cpu"
-
-    # Load in 8-bit on GPU: ~7 GB for 7B, good quality/memory balance on T4.
-    # On CPU, quantization is not supported so we fall back to fp32.
-    if device == "cuda":
-        bnb_config = BitsAndBytesConfig(load_in_8bit=True)
-        model_kwargs = dict(quantization_config=bnb_config, device_map="auto")
-    else:
-        model_kwargs = dict(torch_dtype=torch.float32)
-
-    tokenizer = AutoTokenizer.from_pretrained(
-        GENERATOR_MODEL, use_fast=True, trust_remote_code=True
-    )
-    model = AutoModelForCausalLM.from_pretrained(
-        GENERATOR_MODEL,
-        trust_remote_code=True,
-        **model_kwargs,
-    )
-    if device == "cpu":
-        model = model.to("cpu")
-    model.eval()
-    print(f"  Loaded on {device}.\n")
-
-    # ── Generate ──────────────────────────────────────────────────────────────
+    # ── Generate via Gemini API ───────────────────────────────────────────────
     mode = "a" if args.resume else "w"
     with open(args.output, mode, encoding="utf-8") as out_f:
         for prompt in tqdm(prompts, desc="Generating"):
-            response = generate_hebrew_answer(model, tokenizer, prompt)
+            response = generate_hebrew_answer(client, args.model, prompt)
             out_f.write(json.dumps({"prompt": prompt, "response": response},
                                    ensure_ascii=False) + "\n")
-            out_f.flush()   # safe to Ctrl-C and resume
+            out_f.flush()        # safe to Ctrl-C and resume
+            time.sleep(RATE_LIMIT_SLEEP)
 
     total = len(already_done) + len(prompts)
     print(f"\nDone.  Wrote {total} examples to: {args.output}")
-
-    # ── Free GPU memory ───────────────────────────────────────────────────────
-    del model
-    gc.collect()
-    if device == "cuda":
-        torch.cuda.empty_cache()
 
 
 if __name__ == "__main__":

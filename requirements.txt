@@ -1,6 +1,7 @@
 accelerate==1.13.0
 bitsandbytes
 datasets
+google-genai
 peft
 trl
 annotated-doc==0.0.4
