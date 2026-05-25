@@ -22,7 +22,11 @@ import torch
 from datasets import Dataset
 from peft import LoraConfig, TaskType, get_peft_model
 from transformers import AutoModelForCausalLM, AutoTokenizer
-from trl import DataCollatorForCompletionOnlyLM, SFTConfig, SFTTrainer
+from trl import SFTConfig, SFTTrainer
+try:
+    from trl import DataCollatorForCompletionOnlyLM
+except ImportError:
+    from trl.trainer import DataCollatorForCompletionOnlyLM
 
 # ── Paths ─────────────────────────────────────────────────────────────────────
 
