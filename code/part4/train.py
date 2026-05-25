@@ -23,10 +23,47 @@ from datasets import Dataset
 from peft import LoraConfig, TaskType, get_peft_model
 from transformers import AutoModelForCausalLM, AutoTokenizer
 from trl import SFTConfig, SFTTrainer
-try:
-    from trl import DataCollatorForCompletionOnlyLM
-except ImportError:
-    from trl.trainer import DataCollatorForCompletionOnlyLM
+
+
+class DataCollatorForCompletionOnlyLM:
+    """Masks labels so the loss is computed only on the assistant response.
+
+    Tokens before (and including) the *last* occurrence of ``response_template``
+    in each sequence are set to ``ignore_index`` (-100), so the model learns
+    only to predict the assistant's reply.
+    """
+
+    def __init__(self, response_template, tokenizer, ignore_index: int = -100):
+        self.response_template = (
+            response_template
+            if isinstance(response_template, list)
+            else tokenizer.encode(response_template, add_special_tokens=False)
+        )
+        self.tokenizer = tokenizer
+        self.ignore_index = ignore_index
+
+    def __call__(self, features):
+        batch = self.tokenizer.pad(features, padding=True, return_tensors="pt")
+        labels = batch["input_ids"].clone()
+        tpl, tpl_len = self.response_template, len(self.response_template)
+
+        for i in range(len(labels)):
+            ids = labels[i].tolist()
+            last_match = -1
+            for j in range(len(ids) - tpl_len + 1):
+                if ids[j : j + tpl_len] == tpl:
+                    last_match = j
+            if last_match == -1:
+                labels[i] = torch.full_like(labels[i], self.ignore_index)
+            else:
+                labels[i, : last_match + tpl_len] = self.ignore_index
+
+        # Mask padding tokens
+        if self.tokenizer.pad_token_id is not None:
+            labels[batch["input_ids"] == self.tokenizer.pad_token_id] = self.ignore_index
+
+        batch["labels"] = labels
+        return batch
 
 # ── Paths ─────────────────────────────────────────────────────────────────────
 
