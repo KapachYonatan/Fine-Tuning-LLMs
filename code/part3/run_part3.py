@@ -23,6 +23,19 @@ import os
 import unicodedata
 
 import torch
+
+# ─────────────────────────────────────────────────────────────────────────────
+# CPU core limit
+# ─────────────────────────────────────────────────────────────────────────────
+CPU_CORES = 16
+os.environ["OMP_NUM_THREADS"]     = str(CPU_CORES)
+os.environ["MKL_NUM_THREADS"]     = str(CPU_CORES)
+os.environ["OPENBLAS_NUM_THREADS"] = str(CPU_CORES)
+torch.set_num_threads(CPU_CORES)
+try:
+    os.sched_setaffinity(0, set(range(CPU_CORES)))
+except AttributeError:
+    pass  # not available on all platforms
 from transformers import (
     AutoModelForCausalLM,
     AutoTokenizer,

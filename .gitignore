@@ -34,6 +34,10 @@ models/
 code/part4/adapter*/
 code/part4/checkpoint*/
 code/part4/output*/
+lora_adapter/
+
+# Part 4 generated training data
+data/
 
 # OS artifacts
 .DS_Store

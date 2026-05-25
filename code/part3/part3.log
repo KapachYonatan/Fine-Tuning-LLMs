@@ -1,0 +1,199 @@
+nohup: ignoring input
+
+============================================================
+[A] Hebrew token identification: Qwen/Qwen2.5-7B-Instruct
+============================================================
+  Loading tokenizer ...
+  Vocab size (full): 151665
+  Scanning vocabulary ...
+  Force-added EOS token id=151645
+  Allowed tokens: 13,234 / 151,665
+  Breakdown: 3,164 contain Hebrew chars, 10,070 are digits/punctuation/special
+  Sample Hebrew tokens (20 evenly spaced):
+    ["'ו'", "'צע'", "'גור'", "'דוג'", "'נתי'", "' אם'", "' באמצעות'", "' מנת'", "'נוח'", "'שרה'", "' במס'", "'וכח'", "' ללמוד'", "' אמיתי'", "' הגוף'", "'רפואה'", "'יצירה'", "'מטופ'", "'מידע'", "' נתונים'"]
+  Wrote /home/kapachy/other/Fine-Tuning-LLMs/hebrew_allowed_tokens_qwen.json
+
+============================================================
+[A] Hebrew token identification: mistralai/Mistral-7B-Instruct-v0.3
+============================================================
+  Loading tokenizer ...
+  Vocab size (full): 32768
+  Scanning vocabulary ...
+  Force-added EOS token id=2
+  Allowed tokens: 1,912 / 32,768
+  Breakdown: 38 contain Hebrew chars, 1,874 are digits/punctuation/special
+  Sample Hebrew tokens (20 evenly spaced):
+    ["'י'", "'ו'", "'ה'", "'ת'", "'ר'", "'ל'", "'מ'", "'א'", "'ש'", "'ב'", "'נ'", "'ע'", "'ד'", "'ק'", "'ח'", "'ם'", "'כ'", "'פ'", "'ס'", "'ן'"]
+  Wrote /home/kapachy/other/Fine-Tuning-LLMs/hebrew_allowed_tokens_mistral.json
+
+[B] Resuming — loaded 0 existing record(s) from /home/kapachy/other/Fine-Tuning-LLMs/decoding_outputs.jsonl
+
+============================================================
+[B] Running inference: Qwen/Qwen2.5-7B-Instruct
+============================================================
+  Loading allowed token IDs from /home/kapachy/other/Fine-Tuning-LLMs/hebrew_allowed_tokens_qwen.json ...
+  Hebrew-allowed token count: 13,234
+  Loading model (float16, device_map=cpu) ...
+  NOTE: CPU inference on a 7B model is slow — expect several minutes per query.
+  TIP: Run on Colab with a GPU for int8 quantization and much faster inference.
+[transformers] `torch_dtype` is deprecated! Use `dtype` instead!
+Loading weights:   0%|          | 0/339 [00:00<?, ?it/s]Loading weights:   0%|          | 1/339 [00:00<03:14,  1.74it/s]Loading weights:  12%|█▏        | 40/339 [00:00<00:04, 70.54it/s]Loading weights:  16%|█▌        | 55/339 [00:00<00:03, 84.34it/s]Loading weights:  20%|██        | 69/339 [00:00<00:02, 90.91it/s]Loading weights:  24%|██▍       | 82/339 [00:01<00:02, 96.08it/s]Loading weights:  28%|██▊       | 95/339 [00:01<00:02, 99.24it/s]Loading weights:  32%|███▏      | 107/339 [00:01<00:02, 96.24it/s]Loading weights:  35%|███▌      | 120/339 [00:01<00:02, 102.12it/s]Loading weights:  39%|███▉      | 132/339 [00:01<00:02, 99.10it/s] Loading weights:  42%|████▏     | 144/339 [00:01<00:02, 92.10it/s]Loading weights:  47%|████▋     | 160/339 [00:01<00:01, 93.51it/s]Loading weights:  51%|█████     | 173/339 [00:02<00:01, 98.87it/s]Loading weights:  54%|█████▍    | 184/339 [00:02<00:01, 101.13it/s]Loading weights:  58%|█████▊    | 196/339 [00:02<00:01, 102.49it/s]Loading weights:  61%|██████    | 207/339 [00:02<00:01, 102.32it/s]Loading weights:  65%|██████▍   | 220/339 [00:02<00:01, 98.19it/s] Loading weights:  68%|██████▊   | 232/339 [00:02<00:01, 99.25it/s]Loading weights:  72%|███████▏  | 245/339 [00:02<00:00, 107.17it/s]Loading weights:  76%|███████▌  | 257/339 [00:02<00:00, 102.68it/s]Loading weights:  79%|███████▉  | 268/339 [00:02<00:00, 102.11it/s]Loading weights:  83%|████████▎ | 280/339 [00:03<00:00, 101.79it/s]Loading weights:  86%|████████▌ | 292/339 [00:03<00:00, 100.89it/s]Loading weights:  90%|████████▉ | 304/339 [00:03<00:00, 105.63it/s]Loading weights:  93%|█████████▎| 316/339 [00:03<00:00, 106.39it/s]Loading weights:  97%|█████████▋| 328/339 [00:03<00:00, 107.91it/s]Loading weights: 100%|██████████| 339/339 [00:03<00:00, 95.52it/s] 
+  Model loaded.
+
+  Query 1/10: Explain why the sky looks blue during the day.
+    Running unconstrained ...
+    Done (235 words).
+    Running constrained (Hebrew-only tokens) ...
+    Done (4 words).
+
+  Query 2/10: Give two advantages and two disadvantages of public transportation.
+    Running unconstrained ...
+    Done (238 words).
+    Running constrained (Hebrew-only tokens) ...
+    Done (134 words).
+
+  Query 3/10: Write a short email asking a professor for an extension on an assignme
+    Running unconstrained ...
+    Done (174 words).
+    Running constrained (Hebrew-only tokens) ...
+    Done (55 words).
+
+  Query 4/10: Describe how to make a simple omelette.
+    Running unconstrained ...
+    Done (213 words).
+    Running constrained (Hebrew-only tokens) ...
+    Done (1 words).
+
+  Query 5/10: What is the difference between supervised and unsupervised learning?
+    Running unconstrained ...
+    Done (222 words).
+    Running constrained (Hebrew-only tokens) ...
+    Done (101 words).
+
+  Query 6/10: Summarize the story of Cinderella in three sentences.
+    Running unconstrained ...
+    Done (79 words).
+    Running constrained (Hebrew-only tokens) ...
+    Done (101 words).
+
+  Query 7/10: Suggest three ways to reduce smartphone distraction while studying.
+    Running unconstrained ...
+    Done (251 words).
+    Running constrained (Hebrew-only tokens) ...
+    Done (61 words).
+
+  Query 8/10: Explain what happens when water boils.
+    Running unconstrained ...
+    Done (236 words).
+    Running constrained (Hebrew-only tokens) ...
+    Done (6 words).
+
+  Query 9/10: Give a polite refusal to an invitation to a party.
+    Running unconstrained ...
+    Done (80 words).
+    Running constrained (Hebrew-only tokens) ...
+    Done (1 words).
+
+  Query 10/10: Turn the idea "practice makes progress" into advice for a student.
+    Running unconstrained ...
+    Done (233 words).
+    Running constrained (Hebrew-only tokens) ...
+    Done (200 words).
+
+  Finished Qwen/Qwen2.5-7B-Instruct. Unloading model ...
+
+============================================================
+[B] Running inference: mistralai/Mistral-7B-Instruct-v0.3
+============================================================
+  Loading allowed token IDs from /home/kapachy/other/Fine-Tuning-LLMs/hebrew_allowed_tokens_mistral.json ...
+  Hebrew-allowed token count: 1,912
+  Loading model (float16, device_map=cpu) ...
+  NOTE: CPU inference on a 7B model is slow — expect several minutes per query.
+  TIP: Run on Colab with a GPU for int8 quantization and much faster inference.
+Fetching 3 files:   0%|          | 0/3 [00:00<?, ?it/s]Fetching 3 files:  33%|███▎      | 1/3 [01:50<03:40, 110.23s/it]Fetching 3 files: 100%|██████████| 3/3 [01:50<00:00, 28.82s/it] Fetching 3 files: 100%|██████████| 3/3 [01:50<00:00, 36.96s/it]
+Loading weights:   0%|          | 0/291 [00:00<?, ?it/s]Loading weights:   0%|          | 1/291 [00:00<00:50,  5.74it/s]Loading weights:   5%|▍         | 14/291 [00:00<00:04, 61.53it/s]Loading weights:   8%|▊         | 23/291 [00:00<00:03, 67.21it/s]Loading weights:  11%|█▏        | 33/291 [00:00<00:03, 76.21it/s]Loading weights:  16%|█▌        | 47/291 [00:00<00:02, 95.78it/s]Loading weights:  20%|█▉        | 58/291 [00:00<00:02, 85.05it/s]Loading weights:  23%|██▎       | 68/291 [00:00<00:02, 86.20it/s]Loading weights:  27%|██▋       | 78/291 [00:00<00:02, 86.73it/s]Loading weights:  31%|███       | 90/291 [00:01<00:02, 94.82it/s]Loading weights:  34%|███▍      | 100/291 [00:01<00:02, 93.16it/s]Loading weights:  38%|███▊      | 110/291 [00:01<00:02, 84.50it/s]Loading weights:  41%|████      | 120/291 [00:01<00:01, 86.52it/s]Loading weights:  45%|████▍     | 130/291 [00:01<00:02, 76.34it/s]Loading weights:  48%|████▊     | 141/291 [00:01<00:01, 81.05it/s]Loading weights:  52%|█████▏    | 150/291 [00:01<00:01, 77.65it/s]Loading weights:  55%|█████▍    | 159/291 [00:01<00:01, 78.35it/s]Loading weights:  57%|█████▋    | 167/291 [00:02<00:01, 78.46it/s]Loading weights:  60%|██████    | 175/291 [00:02<00:01, 77.87it/s]Loading weights:  63%|██████▎   | 184/291 [00:02<00:01, 79.47it/s]Loading weights:  66%|██████▋   | 193/291 [00:02<00:01, 72.78it/s]Loading weights:  70%|██████▉   | 203/291 [00:02<00:01, 75.26it/s]Loading weights:  73%|███████▎  | 211/291 [00:02<00:01, 67.58it/s]Loading weights:  76%|███████▌  | 220/291 [00:02<00:00, 72.70it/s]Loading weights:  79%|███████▊  | 229/291 [00:02<00:00, 71.94it/s]Loading weights:  82%|████████▏ | 239/291 [00:03<00:00, 78.75it/s]Loading weights:  85%|████████▌ | 248/291 [00:03<00:00, 76.28it/s]Loading weights:  89%|████████▊ | 258/291 [00:03<00:00, 79.14it/s]Loading weights:  92%|█████████▏| 267/291 [00:03<00:00, 77.63it/s]Loading weights:  95%|█████████▍| 276/291 [00:03<00:00, 74.73it/s]Loading weights:  98%|█████████▊| 284/291 [00:03<00:00, 72.85it/s]Loading weights: 100%|██████████| 291/291 [00:03<00:00, 79.18it/s]
+  Model loaded.
+
+  Query 1/10: Explain why the sky looks blue during the day.
+    Running unconstrained ...
+[transformers] Setting `pad_token_id` to `eos_token_id`:2 for open-end generation.
+    Done (151 words).
+    Running constrained (Hebrew-only tokens) ...
+[transformers] Setting `pad_token_id` to `eos_token_id`:2 for open-end generation.
+    Done (293 words).
+
+  Query 2/10: Give two advantages and two disadvantages of public transportation.
+    Running unconstrained ...
+[transformers] Setting `pad_token_id` to `eos_token_id`:2 for open-end generation.
+    Done (143 words).
+    Running constrained (Hebrew-only tokens) ...
+[transformers] Setting `pad_token_id` to `eos_token_id`:2 for open-end generation.
+    Done (149 words).
+
+  Query 3/10: Write a short email asking a professor for an extension on an assignme
+    Running unconstrained ...
+[transformers] Setting `pad_token_id` to `eos_token_id`:2 for open-end generation.
+    Done (204 words).
+    Running constrained (Hebrew-only tokens) ...
+[transformers] Setting `pad_token_id` to `eos_token_id`:2 for open-end generation.
+    Done (37 words).
+
+  Query 4/10: Describe how to make a simple omelette.
+    Running unconstrained ...
+[transformers] Setting `pad_token_id` to `eos_token_id`:2 for open-end generation.
+    Done (189 words).
+    Running constrained (Hebrew-only tokens) ...
+[transformers] Setting `pad_token_id` to `eos_token_id`:2 for open-end generation.
+    Done (2 words).
+
+  Query 5/10: What is the difference between supervised and unsupervised learning?
+    Running unconstrained ...
+[transformers] Setting `pad_token_id` to `eos_token_id`:2 for open-end generation.
+    Done (226 words).
+    Running constrained (Hebrew-only tokens) ...
+[transformers] Setting `pad_token_id` to `eos_token_id`:2 for open-end generation.
+    Done (30 words).
+
+  Query 6/10: Summarize the story of Cinderella in three sentences.
+    Running unconstrained ...
+[transformers] Setting `pad_token_id` to `eos_token_id`:2 for open-end generation.
+    Done (71 words).
+    Running constrained (Hebrew-only tokens) ...
+[transformers] Setting `pad_token_id` to `eos_token_id`:2 for open-end generation.
+    Done (30 words).
+
+  Query 7/10: Suggest three ways to reduce smartphone distraction while studying.
+    Running unconstrained ...
+[transformers] Setting `pad_token_id` to `eos_token_id`:2 for open-end generation.
+    Done (157 words).
+    Running constrained (Hebrew-only tokens) ...
+[transformers] Setting `pad_token_id` to `eos_token_id`:2 for open-end generation.
+    Done (2 words).
+
+  Query 8/10: Explain what happens when water boils.
+    Running unconstrained ...
+[transformers] Setting `pad_token_id` to `eos_token_id`:2 for open-end generation.
+    Done (170 words).
+    Running constrained (Hebrew-only tokens) ...
+[transformers] Setting `pad_token_id` to `eos_token_id`:2 for open-end generation.
+    Done (7 words).
+
+  Query 9/10: Give a polite refusal to an invitation to a party.
+    Running unconstrained ...
+[transformers] Setting `pad_token_id` to `eos_token_id`:2 for open-end generation.
+    Done (118 words).
+    Running constrained (Hebrew-only tokens) ...
+[transformers] Setting `pad_token_id` to `eos_token_id`:2 for open-end generation.
+    Done (29 words).
+
+  Query 10/10: Turn the idea "practice makes progress" into advice for a student.
+    Running unconstrained ...
+[transformers] Setting `pad_token_id` to `eos_token_id`:2 for open-end generation.
+    Done (58 words).
+    Running constrained (Hebrew-only tokens) ...
+[transformers] Setting `pad_token_id` to `eos_token_id`:2 for open-end generation.
+    Done (1 words).
+
+  Finished mistralai/Mistral-7B-Instruct-v0.3. Unloading model ...
+
+Wrote /home/kapachy/other/Fine-Tuning-LLMs/decoding_outputs.jsonl  (20 records total)

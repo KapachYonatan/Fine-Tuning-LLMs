@@ -923,25 +923,199 @@ negligible (all models within 0.5 tokens/word of each other).
 \subsection{Hebrew Token Identification}
 % ----------------------------------------------------------
 
-\textit{[TODO: For \texttt{Qwen2.5-7B-Instruct} and
-\texttt{Mistral-7B-Instruct-v0.3}: identify all tokens that may participate
-in Hebrew text (Hebrew characters, numbers, punctuation). Describe the
-identification strategy. Refer to the submitted JSON files.]}
+\paragraph{Strategy.}
+For each token ID in a model's vocabulary we decode it in isolation using
+\texttt{tokenizer.decode([id])} and apply the following rule:
+
+\begin{quote}
+A token is \emph{allowed} if and only if every character in its decoded string
+that belongs to Unicode letter category (general category starting with
+\texttt{L}) is also a Hebrew character, i.e.\ falls in the Unicode Hebrew block
+U+0590--U+05FF.
+\end{quote}
+
+This rule keeps: Hebrew letter tokens, digit tokens, all punctuation and
+whitespace tokens (their characters are never in category \texttt{L}),
+byte-fallback tokens that decode as the replacement character U+FFFD (their
+category is \texttt{So}), and special tokens such as EOS/BOS.
+It rejects: any token containing a Latin, Cyrillic, Arabic, or other non-Hebrew
+letter.
+The EOS token is unconditionally added to the allowed set so that generation can
+always terminate.
+
+The token IDs are written to \texttt{hebrew\_allowed\_tokens\_qwen.json} and
+\texttt{hebrew\_allowed\_tokens\_mistral.json}.
+
+\paragraph{Results.}
+Table~\ref{tab:hebrew-tokens} summarises the allowed-token counts for each model.
+
+\begin{table}[H]
+\centering
+\begin{tabular}{lrrrr}
+\toprule
+Model & Full vocab & Allowed & Hebrew-bearing & Digits/punct/special \\
+\midrule
+Qwen2.5-7B-Instruct       & 151,665 & 13,234 (8.7\%) & 3,164 & 10,070 \\
+Mistral-7B-Instruct-v0.3  &  32,768 &  1,912 (5.8\%) &    38 &  1,874 \\
+\bottomrule
+\end{tabular}
+\caption{Hebrew-allowed token counts. ``Hebrew-bearing'' means the decoded token
+contains at least one Hebrew character. The remainder are digits, punctuation,
+whitespace, control, and special tokens that contain no letters.}
+\label{tab:hebrew-tokens}
+\end{table}
+
+The large difference in Hebrew-bearing token counts (3,164 vs.\ 38) reflects
+training data: Qwen2.5 was trained on multilingual corpora and has tokens for
+common Hebrew letter sequences and words, while Mistral-7B-v0.3 was trained
+predominantly on English and European text and retains only 38 Hebrew tokens ---
+all single letters such as \textit{alef}, \textit{bet}, \textit{gimel}, etc.
+Notably, Qwen's larger vocabulary also contributes to its much larger
+\emph{non-Hebrew} allowed set (10,070 digits/punctuation/special tokens vs.\
+1,874 for Mistral).
 
 % ----------------------------------------------------------
 \subsection{Implementation}
 % ----------------------------------------------------------
 
-\textit{[TODO: Brief description of how constrained decoding was implemented
-(logit masking / token-level beam filtering / etc.).]}
+Constrained decoding was implemented as a custom \texttt{LogitsProcessor} subclass,
+\texttt{HebrewOnlyLogitsProcessor}, registered via HuggingFace's
+\texttt{LogitsProcessorList} hook that is called immediately before each
+sampling step.
+
+\paragraph{Mechanism.}
+On the first forward pass the processor builds a Boolean mask of length equal to
+the actual logit tensor's vocabulary dimension (which can differ from
+\texttt{tokenizer.vocab\_size} due to padding).
+All positions corresponding to non-allowed token IDs are set to \texttt{False};
+all positions in the allowed set are set to \texttt{True}.
+At every decoding step the processor sets the logits of all masked-out tokens to
+$-\infty$, making those tokens impossible to sample.
+The mask is built lazily and cached, so the overhead is paid only once per
+generation call.
+
+\paragraph{Decoding configuration.}
+Greedy decoding (\texttt{do\_sample=False}) was used throughout for
+determinism.
+Both constrained and unconstrained runs use identical prompts, formatted with
+\texttt{tokenizer.apply\_chat\_template(messages, tokenize=False,}
+\texttt{add\_generation\_prompt=True)}, which applies each model's native
+conversational format (Qwen: \texttt{<|im\_start|>user\ldots<|im\_end|>};
+Mistral: \texttt{[INST]\ldots[/INST]}).
+This ensures a fair comparison: the only variable between the two conditions is
+the presence or absence of the logits mask.
 
 % ----------------------------------------------------------
 \subsection{Results and Discussion}
 % ----------------------------------------------------------
 
-\textit{[TODO: 10 English queries with unconstrained and constrained outputs for
-both models. Discussion: Is the Hebrew text meaningful? Does it relate to the
-question? Do the models differ? Are certain languages favoured?]}
+\paragraph{Output overview.}
+The unconstrained outputs for all 10 queries are fluent, well-structured English
+responses from both models. The full outputs appear in
+\texttt{decoding\_outputs.jsonl}. Table~\ref{tab:constrained-outputs} shows the
+constrained outputs, truncated to 120 characters.
+
+\begin{longtable}{L{3.5cm} L{4cm} L{4cm}}
+\toprule
+Query & Qwen2.5-7B (constrained) & Mistral-7B (constrained) \\
+\midrule
+\endhead
+\bottomrule
+\endfoot
+Why is the sky blue?
+  & \texttt{!';{\textbackslash}n\#\#\# **[1. **[**[**[**[**[**[**[**[** ...}
+  & \texttt{{\textbackslash}n{\textbackslash}n1. **(1) ** **** ** ** ** ** ...} \\[4pt]
+
+Public transportation advantages/disadvantages
+  & \texttt{\#\#\# **.);\textbackslash{}n- **(1)**\textbackslash{}n **(2)** ...}
+  & \texttt{**1. **\textbackslash{}n\textbackslash{}n**-** **** **** **** ...} \\[4pt]
+
+Email to professor for extension
+  & \texttt{**[{\small(emoji)}]** [12/05/2023] **[{\small(emoji)}]** ...}
+  & \texttt{[---]\textbackslash{}n\textbackslash{}n[**[**]**]\textbackslash{}n ...} \\[4pt]
+
+How to make an omelette
+  & \texttt{¡¡¡¡¡¡¡¡¡¡¡¡¡¡¡¡¡¡¡¡¡¡¡¡¡¡¡¡¡¡¡¡¡¡¡¡¡¡¡¡¡¡¡¡¡¡¡¡¡¡¡ ...}
+  & \texttt{1. **1-2-3-4-5-6-7-8-9-10-11-12-13-14-15- ...} \\[4pt]
+
+Supervised vs.\ unsupervised learning
+  & \texttt{**1. ** **[** **\_** **\_** **\_** **\_** **\_** **\_** ...}
+  & \texttt{**1. **\textbackslash{}n\textbackslash{}n**1.1. **\textbackslash{}n\textbackslash{}n**1.1.1. ** ...} \\[4pt]
+
+Summarise Cinderella
+  & \texttt{.`); //\{\} // (CJK char) // (CJK char) ...}
+  & \texttt{"1) '[1]' ([2])'[3]' ([4])'[5]' ([6]) ...} \\[4pt]
+
+Reduce smartphone distraction
+  & \texttt{1. **{\small(emoji)}** "{\small(emoji)}" "{\small(emoji)}" ...}
+  & \texttt{1. **"**\_"**\_**\_**\_**\_**\_**\_**\_**\_ ...} \\[4pt]
+
+What happens when water boils
+  & \texttt{ !"); //\textbackslash{}n // 3.1.2.2.2.2.2.2.2.2.2. ...}
+  & \texttt{1. **100°C (212°F)**:\textbackslash{}n\textbackslash{}n - **100°C** (760.00714 ...} \\[4pt]
+
+Polite refusal to party invitation
+  & \texttt{¡¡¡¡¡¡¡¡¡¡¡¡¡¡¡¡¡¡¡¡¡¡¡¡¡¡¡¡¡¡¡¡¡¡¡¡¡¡¡¡¡¡¡¡¡¡¡ ...}
+  & \texttt{"**[**\_[**]**],\textbackslash{}n\textbackslash{}n**[**\_[**]**],** ...} \\[4pt]
+
+``Practice makes progress'' advice
+  & \texttt{" ,'"\textbackslash{}n\textbackslash{}n" ,'"\textbackslash{}n\textbackslash{}n" ,'"\textbackslash{}n\textbackslash{}n" ,'" ...}
+  & \texttt{"**'**\_'**\_'**\_'**\_'**\_'**\_'**\_'**\_ ...} \\
+\caption{Constrained decoding outputs (truncated). Full outputs in \texttt{decoding\_outputs.jsonl}.}
+\label{tab:constrained-outputs}
+\end{longtable}
+
+\paragraph{Is the Hebrew text meaningful?}
+No Hebrew characters appear in any constrained output from either model.
+Despite Hebrew-bearing tokens being present in both allowed sets (3,164 for Qwen;
+38 for Mistral), greedy decoding never selects them.
+
+\paragraph{Does the output relate to the question?}
+No. The constrained outputs contain no semantic content; they are purely
+structural or punctuation-based symbol sequences with no informational value.
+
+\paragraph{Do the two models differ?}
+The outputs are gibberish for both models, but they follow different degenerate
+patterns reflecting each model's internal ``schema memory'':
+
+\begin{itemize}[noitemsep]
+\item \textbf{Qwen} tends to produce Markdown-like header loops
+  (\texttt{\#\#\# **[1. **[**[**[** \ldots}) or repeating single symbols
+  (\texttt{¡¡¡¡¡ \ldots}, \texttt{" ,'" \ldots}).
+\item \textbf{Mistral} tends to produce numbered list or hierarchical heading
+  loops (\texttt{**1. **}, \texttt{**1.1. **}, \texttt{**1.1.1. **}, \ldots),
+  template bracket structures (\texttt{[**[**]**] \ldots}), or
+  incrementing number sequences (\texttt{1-2-3-4-5- \ldots}).
+\end{itemize}
+
+Both patterns suggest the model enters a degenerate attractor state once normal
+text tokens are unavailable.
+
+\paragraph{Are some languages favoured over others?}
+No natural language is produced. The outputs are language-free sequences of
+punctuation, digits, and structural tokens.
+
+\paragraph{Root cause.}
+The core problem is a \emph{mismatch between the token constraint and the
+model's probability distribution}.
+When the model is conditioned on an English prompt, its distribution assigns
+probabilities close to zero to Hebrew tokens and high probabilities to
+English-letter tokens.
+Masking out all non-Hebrew-allowed tokens removes the high-probability English
+tokens, but leaves intact a large set of punctuation and structural tokens that
+the model assigns moderate probability to.
+Greedy decoding therefore collapses to whichever punctuation token has the
+highest logit at each step, quickly entering a repetitive loop.
+
+In principle, adding a Hebrew-language instruction to the prompt (e.g.,
+``Please respond in Hebrew'') would shift the distribution toward Hebrew tokens
+and likely produce meaningful Hebrew output under the same constraint.
+However, this was deliberately not done: modifying the prompt for the
+constrained condition but not the unconstrained condition would make the two
+conditions incomparable, since any quality difference could be attributed to the
+prompt change rather than to the token constraint alone.
+Fine-tuning the model to shift its \emph{prior} distribution toward Hebrew ---
+the subject of Part~4 --- is the correct approach.
 
 % ============================================================
 \newpage

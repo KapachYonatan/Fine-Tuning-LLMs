@@ -1,0 +1,5 @@
+*Part 3*
+In the constrained decoding section, we identified tokens that are non-letters non-hebrew, and kept all other tokens that may participate in Hebrew answers. This results in a large number of tokens, most of them are non-letter symbols that may look like gibberish combined. 
+Indeed, the constrained deconding outputs answer were complete gibberish.
+Perhaps, if we performed prompt engineering, in the constrained case, that will instruct the model to answer in Hebrew for this case, that would've create better and more informative answers. In the case of this assignemnt, I considered this solution as not fair, as we are supposed to compare the same prompt in the two cases.
+Another possible improvement is filtering some "gibberish" tokens (i.e, large whitespaces, code blocks, unicode control characters). Although these are tokens that may involve in Hebrew texts, same as with all other languages. 
