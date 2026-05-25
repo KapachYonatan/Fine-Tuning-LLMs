@@ -1126,24 +1126,156 @@ the subject of Part~4 --- is the correct approach.
 \subsection{Data}
 % ----------------------------------------------------------
 
-\textit{[TODO: Describe the training data (English prompt $\to$ Hebrew answer
-pairs): source, creation method, and confirmation that none of the 20 evaluation
-inputs appear in the training set.]}
+For fine-tuning, I created a supervised instruction dataset of
+\textbf{1,000 English prompt $\to$ Hebrew answer pairs}.
+The prompts were sampled from the
+\texttt{tatsu-lab/alpaca} instruction corpus, and the Hebrew responses were
+generated automatically using the Gemini API in
+\texttt{code/part4/create\_data.py}.
+The script uses \texttt{gemini-3-flash-preview} with the system instruction
+``Always answer in Hebrew'', then stores each pair in JSONL format.
+
+To prevent data leakage, the 20 assignment evaluation prompts are explicitly
+listed in the script (\texttt{EVAL\_INPUTS}) and filtered out before
+writing training examples. Therefore, none of the evaluation inputs appears in
+the fine-tuning set.
+
+The final training set covers diverse topics (science, history, writing,
+everyday reasoning, and basic programming), which helps evaluate whether the
+model learned a general language behavior (answering in Hebrew) rather than a
+single narrow template.
 
 % ----------------------------------------------------------
 \subsection{Fine-Tuning Procedure}
 % ----------------------------------------------------------
 
-\textit{[TODO: Describe the fine-tuning setup: LoRA configuration (rank,
-$\alpha$, target modules), training hyper-parameters, and the chat-template
-usage for both training and inference.]}
+I fine-tuned \texttt{Qwen/Qwen2.5-1.5B-Instruct} using LoRA (PEFT) with
+\texttt{trl} SFTTrainer in Google Colab.
+LoRA was selected to reduce compute and memory cost while keeping base model
+weights frozen.
+
+\begin{table}[H]
+\centering
+\caption{LoRA Configuration}
+\begin{tabular}{L{4cm}L{8.5cm}}
+\toprule
+Parameter & Value \\
+\midrule
+Rank $r$ & 8 \\
+$\alpha$ & 16 \\
+Dropout & 0.05 \\
+Target modules & \texttt{q\_proj}, \texttt{k\_proj}, \texttt{v\_proj}, \texttt{o\_proj} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{table}[H]
+\centering
+\caption{Training Hyper-Parameters}
+\begin{tabular}{L{4cm}L{8.5cm}}
+\toprule
+Parameter & Value \\
+\midrule
+Epochs & 3 \\
+Batch size & 2 \\
+Gradient accumulation & 4 (effective batch size = 8) \\
+Learning rate & $2 \times 10^{-4}$ \\
+Max sequence length & 512 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+I used a completion-only data collator, so loss is computed only on assistant
+tokens (Hebrew response) while user-prompt tokens are masked with label $-100$.
+This directly optimizes the target behavior: produce a Hebrew response for an
+English instruction.
+
+The same Qwen chat template format was used consistently in both training and
+inference:
+\texttt{<|im\_start|>user ... <|im\_end|><|im\_start|>assistant ...}.
 
 % ----------------------------------------------------------
 \subsection{Evaluation}
 % ----------------------------------------------------------
 
-\textit{[TODO: Run the original and fine-tuned \texttt{Qwen2.5-1.5B-Instruct}
-on all 20 evaluation inputs. Present outputs side by side. Discuss whether the
-fine-tuned model answers in Hebrew and whether the answers are relevant.]}
+I evaluated the original and fine-tuned model on all 20 required prompts
+(stored in \texttt{eval\_outputs.jsonl}).
+
+\begin{table}[H]
+\centering
+\caption{Evaluation Summary (20 prompts)}
+\begin{tabular}{L{5cm}C{4cm}C{4cm}}
+\toprule
+Metric & Base model & Fine-tuned model \\
+\midrule
+Responses in Hebrew & 0/20 (0\%) & 20/20 (100\%) \\
+Good / Partial / Poor relevance & 20 / 0 / 0 & 3 / 11 / 6 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\textbf{Training-loss evidence of learning.}
+The training loss started at \textbf{2.825} and decreased to
+\textbf{2.355}.
+In this setup, loss is the average token-level negative log-likelihood on the
+assistant response tokens:
+\[
+\mathcal{L} = -\frac{1}{N}\sum_{t=1}^{N}\log p_{\theta}(y_t\mid x, y_{<t}).
+\]
+A lower value means the model assigns higher probability to the correct next
+Hebrew token, so the downward trend indicates real learning of the target
+generation behavior.
+
+\textbf{Two good examples and one bad example.}
+\begin{itemize}[leftmargin=*]
+  \item \textbf{Good: ``What is the capital of France?''}
+  The fine-tuned model answered correctly in Hebrew and identified Paris.
+  \item \textbf{Good: ``Write a short poem about rain.''}
+  The fine-tuned model produced a coherent Hebrew poem structure, showing it
+  learned the requested output language and style format.
+  \item \textbf{Bad: ``Name two famous painters from the Renaissance.''}
+  The fine-tuned model hallucinated and listed Shakespeare as a painter,
+  which is factually incorrect.
+\end{itemize}
+
+\textbf{Per-prompt results (all 20 inputs).}
+\begin{longtable}{L{0.8cm}L{6.2cm}C{2.2cm}C{2.2cm}L{3.0cm}}
+\caption{Base vs Fine-Tuned Outputs on the 20 Evaluation Prompts}\label{tab:part4_all_outputs}\\
+\toprule
+ID & Prompt (short) & Base lang & FT lang & FT quality note \\
+\midrule
+\endfirsthead
+\toprule
+ID & Prompt (short) & Base lang & FT lang & FT quality note \\
+\midrule
+\endhead
+1 & Why sky looks blue & English & Hebrew & Poor (topic drift) \\
+2 & 2 pros/2 cons public transport & English & Hebrew & Partial \\
+3 & Email for extension & English & Hebrew & Partial \\
+4 & How to make omelette & English & Hebrew & Poor \\
+5 & Supervised vs unsupervised & English & Hebrew & Partial \\
+6 & Cinderella in 3 sentences & English & Hebrew & Poor \\
+7 & Reduce smartphone distraction & English & Hebrew & Partial \\
+8 & What happens when water boils & English & Hebrew & Partial \\
+9 & Polite refusal to party & English & Hebrew & Partial \\
+10 & Practice makes progress advice & English & Hebrew & Poor \\
+11 & Capital of France & English & Hebrew & Good \\
+12 & Number of continents & English & Hebrew & Good \\
+13 & Gravity in simple terms & English & Hebrew & Partial \\
+14 & Short poem about rain & English & Hebrew & Good \\
+15 & 3 exercise benefits & English & Hebrew & Partial \\
+16 & How to make tea & English & Hebrew & Partial \\
+17 & Noun vs verb difference & English & Hebrew & Partial \\
+18 & Renaissance painters & English & Hebrew & Poor (hallucination) \\
+19 & Why people dream & English & Hebrew & Partial \\
+20 & Advice for a new job & English & Hebrew & Partial \\
+\bottomrule
+\end{longtable}
+
+Overall, fine-tuning was \textbf{successful for language control}
+(100\% Hebrew outputs) but only \textbf{partially successful for factual and
+instruction accuracy}.
+The model appears to have learned a strong Hebrew-response prior, while content
+quality remains mixed on more complex prompts.
 
 \end{document}

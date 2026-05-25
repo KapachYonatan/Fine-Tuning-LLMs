@@ -94,7 +94,7 @@ def load_model(base_model: str, adapter_path: str | None, use_gpu: bool):
     )
     model = AutoModelForCausalLM.from_pretrained(
         base_model,
-        torch_dtype=dtype,
+        dtype=dtype,
         device_map="auto" if use_gpu else None,
         trust_remote_code=True,
     )

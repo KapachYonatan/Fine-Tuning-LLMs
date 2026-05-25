@@ -17,8 +17,17 @@ Output:
 import argparse
 import json
 import os
+import warnings
 
 import torch
+
+# Suppress deprecation noise from bitsandbytes registering Enum types with
+# torch's pytree system (triggered transitively via peft).
+warnings.filterwarnings(
+    "ignore",
+    message=".*register_constant.*Enum subclass.*",
+    category=UserWarning,
+)
 from datasets import Dataset
 from peft import LoraConfig, TaskType, get_peft_model
 from transformers import AutoModelForCausalLM, AutoTokenizer
@@ -147,7 +156,7 @@ def main():
     print(f"Loading model: {BASE_MODEL}")
     model = AutoModelForCausalLM.from_pretrained(
         BASE_MODEL,
-        torch_dtype=torch.float16 if use_gpu else torch.float32,
+        dtype=torch.float16 if use_gpu else torch.float32,
         device_map="auto"  if use_gpu else None,
         trust_remote_code=True,
     )
