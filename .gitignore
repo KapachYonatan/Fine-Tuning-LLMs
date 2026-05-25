@@ -29,6 +29,7 @@ env/
 # HuggingFace hub cache (if redirected into workspace)
 hub/
 models/
+code/part2/hf_token.txt
 
 # Part 4 fine-tuned adapter output (may be large)
 code/part4/adapter*/

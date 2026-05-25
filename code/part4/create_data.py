@@ -21,7 +21,7 @@ import os
 import torch
 from datasets import load_dataset
 from tqdm import tqdm
-from transformers import AutoModelForCausalLM, AutoTokenizer
+from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
 
 # ── Paths ─────────────────────────────────────────────────────────────────────
 
@@ -155,14 +155,22 @@ def main():
     # ── Load generator model ──────────────────────────────────────────────────
     print(f"\nLoading generator model: {GENERATOR_MODEL}")
     device    = "cuda" if torch.cuda.is_available() else "cpu"
+
+    # Load in 8-bit on GPU: ~7 GB for 7B, good quality/memory balance on T4.
+    # On CPU, quantization is not supported so we fall back to fp32.
+    if device == "cuda":
+        bnb_config = BitsAndBytesConfig(load_in_8bit=True)
+        model_kwargs = dict(quantization_config=bnb_config, device_map="auto")
+    else:
+        model_kwargs = dict(torch_dtype=torch.float32)
+
     tokenizer = AutoTokenizer.from_pretrained(
         GENERATOR_MODEL, use_fast=True, trust_remote_code=True
     )
     model = AutoModelForCausalLM.from_pretrained(
         GENERATOR_MODEL,
-        torch_dtype=torch.float16 if device == "cuda" else torch.float32,
-        device_map="auto"  if device == "cuda" else None,
         trust_remote_code=True,
+        **model_kwargs,
     )
     if device == "cpu":
         model = model.to("cpu")
