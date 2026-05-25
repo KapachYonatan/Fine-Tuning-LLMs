@@ -195,7 +195,7 @@ def main():
         save_total_limit=1,
         report_to="none",
         dataset_text_field="text",
-        max_seq_length=512,
+        max_length=512,
     )
 
     # ── Trainer ───────────────────────────────────────────────────────────────
